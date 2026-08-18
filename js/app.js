@@ -28,7 +28,18 @@ async function boot(){
     r.setAttribute('data-theme',isDark?'light':'dark');
     renderAll(); // re-render for chart chrome colors baked into SVG attrs via CSS vars (vars resolve live, but re-render keeps layout fresh)
   });
-  $('#bannerClose').addEventListener('click',()=>$('#banner').remove());
+  // the banner doubles as the Terms acknowledgment: dismissal is remembered per device
+  const ACK_KEY='inletcast_ack_v1';
+  let acked=false;
+  try{ acked=localStorage.getItem(ACK_KEY)==='1'; }catch(e){}
+  if(acked){ const bn=$('#banner'); if(bn) bn.remove(); }
+  else $('#bannerClose').addEventListener('click',()=>{
+    try{ localStorage.setItem(ACK_KEY,'1'); }catch(e){}
+    $('#banner').remove();
+  });
+  // terms links switch views in-app; without JS the #view-terms fragment still works via CSS :target
+  $$('a[href="#view-terms"]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();setView('terms');}));
+  if(location.hash==='#view-terms') setView('terms');
   $('#modeBadge').addEventListener('click',toggleModeSources);
   $('#boatSel').addEventListener('change',e=>{state.boatKey=e.target.value;state.boatFactor=parseFloat(e.target.value);renderAll();});
   $('#areaSel').addEventListener('change',e=>{state.area=e.target.value;renderInletCards();});

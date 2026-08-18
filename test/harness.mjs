@@ -27,7 +27,23 @@ function fakeCanvasContext(canvas) {
   };
 }
 
-export async function loadApp({ fetchStub, beforeBoot, settleMs = 6000 } = {}) {
+// jsdom serves file: pages from an opaque origin, where its native localStorage throws.
+// Install a seedable in-memory Storage shim instead so persistence code runs for real.
+function makeStorage(seed = {}) {
+  const m = new Map(Object.entries(seed).map(([k, v]) => [k, String(v)]));
+  return {
+    get length() { return m.size; },
+    key(i) { return [...m.keys()][i] ?? null; },
+    getItem(k) { return m.has(String(k)) ? m.get(String(k)) : null; },
+    setItem(k, v) { m.set(String(k), String(v)); },
+    removeItem(k) { m.delete(String(k)); },
+    clear() { m.clear(); },
+  };
+}
+
+// localStorageSeed: {key: value} entries present in the window's localStorage before
+// the app scripts run — lets a scenario simulate a returning visitor.
+export async function loadApp({ fetchStub, beforeBoot, localStorageSeed, settleMs = 6000 } = {}) {
   const errors = [];
   const vc = new VirtualConsole();
   vc.on('jsdomError', (e) => {
@@ -50,6 +66,7 @@ export async function loadApp({ fetchStub, beforeBoot, settleMs = 6000 } = {}) {
       });
       window.addEventListener('error', (e) => errors.push(e.error ? String(e.error.stack || e.error) : String(e.message)));
       window.addEventListener('unhandledrejection', (e) => errors.push('unhandledrejection: ' + (e.reason && (e.reason.stack || e.reason))));
+      Object.defineProperty(window, 'localStorage', { value: makeStorage(localStorageSeed), configurable: true });
       if (beforeBoot) beforeBoot(window);
     },
   });

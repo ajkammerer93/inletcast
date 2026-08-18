@@ -124,6 +124,73 @@ await scenario('tides down: synthetic tide labeled, excluded from score, station
   window.close();
 });
 
+await scenario('terms & copy: footer terms link, binding language, attribution, no go-signal or stale-outlook copy', async () => {
+  const { window, document, errors } = await loadApp({ fetchStub: makeFetchStub() });
+  noFatal(errors);
+  // footer links to the terms section; the section carries the binding language
+  const link = document.querySelector('footer.disc a[href="#view-terms"]');
+  assert(link, 'footer carries a Terms of Use link');
+  const terms = document.getElementById('view-terms');
+  assert(terms, '#view-terms section exists');
+  assert(/as is/i.test(terms.textContent), 'terms contain AS-IS language');
+  assert(/assumption of risk/i.test(terms.textContent), 'terms contain assumption-of-risk language');
+  assert(/maximum extent permitted/i.test(terms.textContent), 'terms contain limitation-of-liability language');
+  assert(/North Carolina/.test(terms.textContent), 'terms name NC governing law');
+  assert(/no cookies, no analytics, no tracking/i.test(terms.textContent), 'terms carry the privacy note');
+  // clicking the footer link opens the terms view in-app
+  link.click();
+  assert(terms.classList.contains('active'), 'terms link activates the terms view');
+  // footer: NOAA non-affiliation + live Open-Meteo attribution link
+  const footer = document.querySelector('footer.disc');
+  assert(/not affiliated with, operated by, or endorsed by NOAA/.test(footer.textContent), 'footer disclaims NOAA affiliation');
+  const om = footer.querySelector('a[href="https://open-meteo.com/"]');
+  assert(om && /CC BY 4.0/.test(footer.textContent), 'footer carries the Open-Meteo CC BY 4.0 attribution link');
+  // banner is the acknowledgment and links to the terms
+  const banner = document.getElementById('banner');
+  assert(banner && /accept the/.test(banner.textContent) && banner.querySelector('a[href="#view-terms"]'), 'banner carries the Terms acknowledgment link');
+  // Method copy: condition-descriptive classes, no NOAA-insider claim, LLC named consistently
+  const method = text(document, '#methodBody') || '';
+  assert(!/handles comfortably/.test(method), 'class definitions no longer warrant boat suitability');
+  assert(/below the thresholds this tool uses/.test(method), 'Favorable is defined by thresholds, not suitability');
+  assert(!/we verify NOAA operational models/.test(method), 'Method drops the NOAA-insider verification claim');
+  assert(/standard way operational marine models are verified/.test(method), 'Method keeps the verification promise, reworded');
+  assert(!/paid SST chart services sell/.test(method), 'MUR claim softened');
+  assert(!/Ghosttree Technical Solutions —/.test(method), 'Method names the LLC in full');
+  // detail view: sample outlook is tagged and carries no weekday advice or update-cadence claim
+  const cards = document.querySelectorAll('#inletCards .card');
+  cards[0].click();
+  const detail = document.getElementById('view-detail').textContent;
+  assert(/SAMPLE — illustrative, not a current forecast/.test(detail), 'outlook panel tagged as a sample');
+  assert(!/Monday and Thursday/.test(detail), 'outlook drops the false update-cadence claim');
+  assert(!/Thursday is a legitimate Gulf Stream day/.test(detail), 'outlook drops weekday-specific advice');
+  assert(!/In a window now/.test(detail), 'go-signal window phrasing removed');
+  // map SST legend shows the MUR analysis date (from the fixture time)
+  const legend = document.querySelector('.sstlegend');
+  assert(legend && /analysis 2026-08-17/.test(legend.textContent), 'SST legend shows the MUR analysis date');
+  window.close();
+});
+
+await scenario('banner: dismissal persists across reloads via localStorage', async () => {
+  const first = await loadApp({ fetchStub: makeFetchStub() });
+  noFatal(first.errors);
+  assert(first.document.getElementById('banner'), 'banner shows on a first visit');
+  first.document.getElementById('bannerClose').click();
+  assert(!first.document.getElementById('banner'), 'banner is removed after dismissal');
+  // carry the first window's localStorage into a fresh load, like a returning visitor
+  const seed = {};
+  const ls = first.window.localStorage;
+  for (let i = 0; i < ls.length; i++) { const k = ls.key(i); seed[k] = ls.getItem(k); }
+  assert(Object.keys(seed).length > 0, 'dismissal wrote a localStorage flag');
+  first.window.close();
+  const second = await loadApp({ fetchStub: makeFetchStub(), localStorageSeed: seed });
+  noFatal(second.errors);
+  assert(!second.document.getElementById('banner'), 'banner stays dismissed on the next load');
+  // a clean visitor still gets the banner
+  const third = await loadApp({ fetchStub: makeFetchStub() });
+  assert(third.document.getElementById('banner'), 'banner still shows without the stored flag');
+  second.window.close(); third.window.close();
+});
+
 const failed = results.filter((r) => !r.ok);
 console.log(failed.length ? `\n${failed.length}/${results.length} scenarios FAILED` : `\nAll ${results.length} scenarios passed`);
 process.exit(failed.length ? 1 : 0);

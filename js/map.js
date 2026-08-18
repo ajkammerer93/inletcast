@@ -212,7 +212,7 @@ function coastMap(parent, opts){
         const x=X(f.lon),y=Y(f.lat);
         svgEl('circle',{cx:x,cy:y,r:4,fill:'var(--series-2)',stroke:'var(--surface-1)','stroke-width':2},svg);
         const hit=svgEl('circle',{cx:x,cy:y,r:13,fill:'transparent',cursor:'default'},svg);
-        hit.addEventListener('pointermove',ev=>showTip(ev.clientX,ev.clientY,'West wall — off '+f.name,[
+        hit.addEventListener('pointermove',ev=>showTip(ev.clientX,ev.clientY,(f.weak?'Strongest SST front':'West wall')+' — off '+f.name,[
           {color:'var(--series-2)',val:'Δ '+f.g.toFixed(1)+' °C',lbl:'SST front strength'+(f.weak?' (weak)':'')},
           {val:(f.inshore*9/5+32).toFixed(0)+' °F',lbl:'inshore side'},
           {val:(f.offshore*9/5+32).toFixed(0)+' °F',lbl:'stream side'},
@@ -222,7 +222,9 @@ function coastMap(parent, opts){
       const lp=fp[Math.min(1,fp.length-1)];
       const wl=svgEl('text',{x:lp.x+10,y:lp.y-8,'font-size':10,'font-weight':600,fill:'var(--ink-2)',
         stroke:'var(--surface-1)','stroke-width':3,'paint-order':'stroke'},svg);
-      wl.textContent='West wall · '+(sstSource==='mur'?'satellite SST':sstSource==='nwp'?'NWP SST':'demo SST');
+      // only call it the west wall when most steps are strong; a weak line is just the strongest front we found
+      const weakLine=front.filter(f=>f.weak).length>front.length/2;
+      wl.textContent=(weakLine?'Strongest SST front':'West wall')+' · '+(sstSource==='mur'?'satellite SST':sstSource==='nwp'?'NWP SST':'demo SST');
     }
   }
 
@@ -322,8 +324,15 @@ function coastMap(parent, opts){
     const lo=el('span','',lg,(sstMin*9/5+32).toFixed(0)+' °F');
     lg.insertBefore(lo,bar);
     el('span','',lg,(sstMax*9/5+32).toFixed(0)+' °F');
+    // MUR legend carries the analysis date + age — a blended analysis can lag real water by a day or more
+    let murNote='';
+    if(sstSource==='mur'&&sstGrid.time){
+      murNote=' · analysis '+String(sstGrid.time).slice(0,10);
+      const ageD=Math.round((Date.now()-new Date(sstGrid.time).getTime())/864e5);
+      if(Number.isFinite(ageD)&&ageD>=0) murNote+=' ('+(ageD===0?'today':ageD+' d old')+')';
+    }
     const srcTxt = sstSource==='mur'
-      ? 'SST · MUR satellite analysis'+(sstGrid.time?' · '+String(sstGrid.time).slice(0,10):'')
+      ? 'SST · MUR satellite analysis'+murNote
       : sstSource==='nwp' ? 'SST · NWP model analysis' : 'SST · demo';
     el('span','sstnote',lg,srcTxt);
   }

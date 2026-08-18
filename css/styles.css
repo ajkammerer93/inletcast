@@ -119,6 +119,8 @@ nav.tabs button.active { color:var(--ink-1); border-bottom-color:var(--accent); 
 main { max-width:980px; margin:0 auto; padding:16px; }
 .view { display:none; }
 .view.active { display:block; }
+/* the Terms section stays reachable without JS: navigating to #view-terms shows it */
+.view:target { display:block; }
 h2.viewtitle { font-size:17px; margin:2px 0 2px; letter-spacing:-0.01em; }
 p.viewsub { font-size:13px; color:var(--ink-2); margin-bottom:14px; }
 
@@ -265,6 +267,9 @@ table.data td:first-child { color:var(--ink-1); }
 .outlook { font-size:14px; color:var(--ink-2); }
 .outlook .byline { font-size:12px; color:var(--ink-3); margin-bottom:8px; }
 .outlook p { margin-bottom:10px; }
+/* sample panels — visually muted and dashed so canned content never reads as a live forecast */
+.panel.sample { background:var(--chip-bg); border:1px dashed var(--axis); box-shadow:none; }
+.panel.sample .sampletag { margin-left:auto; }
 
 /* footer disclaimer */
 footer.disc {
