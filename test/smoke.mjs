@@ -1,6 +1,6 @@
 // Smoke tests: three data scenarios (live / offline / mixed) against the real app.
 // Run: node smoke.mjs   (from the test/ directory)
-import { loadApp, assert } from './harness.mjs';
+import { loadApp, assert, text } from './harness.mjs';
 import { makeFetchStub } from './fixtures.mjs';
 
 const results = [];
@@ -29,6 +29,12 @@ await scenario('live: all sources up -> live badge, 7 inlet cards, no page error
   assert(badge && /live data/i.test(badge.textContent), `badge says "${badge && badge.textContent}"`);
   const watermarks = [...document.querySelectorAll('svg text')].filter((t) => t.textContent === 'DEMO DATA');
   assert(watermarks.length === 0, 'DEMO watermark should not appear in live mode');
+  // single APP_VERSION drives both the footer and the Method tab
+  const fv = (text(document, 'footer.disc') || '').match(/prototype v(\d+\.\d+)/);
+  assert(fv, 'footer shows a version string');
+  assert(fv[1] === '0.6', `footer version is v${fv && fv[1]}, want v0.6`);
+  const mv = (text(document, '#methodBody') || '').match(/prototype v(\d+\.\d+)/);
+  assert(mv && mv[1] === fv[1], `Method tab version (${mv && mv[1]}) should match footer (${fv[1]})`);
   window.close();
 });
 
