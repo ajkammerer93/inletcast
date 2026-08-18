@@ -1,0 +1,1758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>InletCast — NC Inlet Condition Windows (Prototype)</title>
+<meta name="description" content="Crossing-condition windows for North Carolina inlets, a Gulf Stream trip planner, live satellite SST, and honest model-agreement forecasts. Free beta prototype by Ghosttree Technical Solutions.">
+<link rel="canonical" href="https://inletcast.com/">
+<meta property="og:title" content="InletCast — NC inlet condition windows">
+<meta property="og:description" content="When can you get out, and when can you get back in. Inlet crossing windows, Gulf Stream planning, and live satellite SST for the NC coast.">
+<meta property="og:url" content="https://inletcast.com/">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#2a78d6">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232a78d6'/%3E%3Cpath d='M8 40c6-8 10-8 16 0s10 8 16 0 10-8 16 0' stroke='white' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3Cpath d='M8 52c6-8 10-8 16 0s10 8 16 0 10-8 16 0' stroke='white' stroke-width='5' fill='none' stroke-linecap='round' opacity='.55'/%3E%3C/svg%3E">
+<style>
+:root {
+  color-scheme: light;
+  --surface-1:#fcfcfb; --page:#f9f9f7;
+  --ink-1:#0b0b0b; --ink-2:#52514e; --ink-3:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --hairline:rgba(11,11,11,0.10);
+  --series-1:#2a78d6; --series-2:#eb6834; --series-3:#1baf7a;
+  --seq-300:#6da7ec; --seq-450:#2a78d6; --seq-100:#cde2fb;
+  --st-good:#0ca30c; --st-warn:#fab219; --st-serious:#ec835a; --st-critical:#d03b3b;
+  --st-good-ink:#006300;
+  --chip-bg:rgba(11,11,11,0.045);
+  --land:#edebe3;
+  --accent:#2a78d6;
+  --shadow:0 1px 2px rgba(11,11,11,.05), 0 4px 14px rgba(11,11,11,.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --surface-1:#1a1a19; --page:#0d0d0d;
+    --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+    --grid:#2c2c2a; --axis:#383835; --hairline:rgba(255,255,255,0.10);
+    --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70;
+    --seq-300:#6da7ec; --seq-450:#3987e5; --seq-100:#184f95;
+    --st-good-ink:#0ca30c;
+    --chip-bg:rgba(255,255,255,0.06);
+    --land:#242423;
+    --accent:#3987e5;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-1:#1a1a19; --page:#0d0d0d;
+  --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+  --grid:#2c2c2a; --axis:#383835; --hairline:rgba(255,255,255,0.10);
+  --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70;
+  --seq-300:#6da7ec; --seq-450:#3987e5; --seq-100:#184f95;
+  --st-good-ink:#0ca30c;
+  --chip-bg:rgba(255,255,255,0.06);
+  --land:#242423;
+  --accent:#3987e5;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.35);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+html { -webkit-text-size-adjust:100%; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background:var(--page); color:var(--ink-1);
+  font-size:15px; line-height:1.45;
+  padding-bottom:70px;
+}
+a { color:var(--accent); }
+button { font-family:inherit; }
+
+/* ---------- header ---------- */
+header.app {
+  position:sticky; top:0; z-index:40;
+  background:var(--page);
+  border-bottom:1px solid var(--hairline);
+  padding:10px 16px 0;
+}
+.brandrow { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.logo { font-weight:700; font-size:20px; letter-spacing:-0.02em; }
+.logo .cast { color:var(--accent); }
+.proto-tag {
+  font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--ink-3); border:1px solid var(--hairline); border-radius:4px; padding:2px 6px;
+}
+.mode-badge {
+  font-size:11px; font-weight:600; padding:3px 8px; border-radius:20px;
+  background:var(--chip-bg); color:var(--ink-2); display:inline-flex; align-items:center; gap:6px;
+}
+.mode-badge .dot { width:7px; height:7px; border-radius:50%; background:var(--ink-3); }
+.mode-badge.live .dot { background:var(--st-good); }
+.spacer { flex:1; }
+.iconbtn {
+  background:none; border:1px solid var(--hairline); color:var(--ink-2);
+  border-radius:8px; padding:5px 10px; font-size:13px; cursor:pointer;
+}
+.iconbtn:hover { background:var(--chip-bg); }
+a.betabtn { text-decoration:none; background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+a.betabtn:hover { opacity:.9; background:var(--accent); }
+
+/* filter row */
+.filters {
+  display:flex; gap:8px; align-items:center; padding:10px 0;
+  overflow-x:auto; scrollbar-width:none;
+}
+.filters::-webkit-scrollbar { display:none; }
+.filters label { font-size:12px; color:var(--ink-3); white-space:nowrap; }
+.filters select {
+  font-family:inherit; font-size:13px; color:var(--ink-1);
+  background:var(--surface-1); border:1px solid var(--hairline);
+  border-radius:8px; padding:6px 8px;
+}
+nav.tabs { display:flex; gap:2px; overflow-x:auto; scrollbar-width:none; }
+nav.tabs::-webkit-scrollbar { display:none; }
+nav.tabs button {
+  background:none; border:none; border-bottom:2px solid transparent;
+  color:var(--ink-3); font-size:14px; font-weight:600;
+  padding:8px 12px 10px; cursor:pointer; white-space:nowrap;
+}
+nav.tabs button.active { color:var(--ink-1); border-bottom-color:var(--accent); }
+
+/* ---------- layout ---------- */
+main { max-width:980px; margin:0 auto; padding:16px; }
+.view { display:none; }
+.view.active { display:block; }
+h2.viewtitle { font-size:17px; margin:2px 0 2px; letter-spacing:-0.01em; }
+p.viewsub { font-size:13px; color:var(--ink-2); margin-bottom:14px; }
+
+/* notice banner */
+.notice {
+  background:var(--surface-1); border:1px solid var(--hairline); border-left:3px solid var(--st-warn);
+  border-radius:10px; padding:10px 12px; margin:0 0 14px;
+  font-size:13px; color:var(--ink-2); display:flex; gap:10px; align-items:flex-start;
+}
+.notice strong { color:var(--ink-1); }
+.notice button { margin-left:auto; background:none; border:none; color:var(--ink-3); font-size:16px; cursor:pointer; line-height:1; padding:2px; }
+
+/* ---------- cards ---------- */
+.cardgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); gap:12px; }
+.card {
+  background:var(--surface-1); border:1px solid var(--hairline); border-radius:14px;
+  padding:14px 14px 12px; box-shadow:var(--shadow); cursor:pointer;
+  transition:transform .08s ease;
+}
+.card:hover { transform:translateY(-1px); }
+.card h3 { font-size:15px; display:flex; align-items:baseline; gap:8px; }
+.card .area { font-size:11px; color:var(--ink-3); font-weight:500; }
+.statrow { display:flex; gap:14px; margin:8px 0 6px; flex-wrap:wrap; }
+.stat { min-width:64px; }
+.stat .lbl { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-3); }
+.stat .val { font-size:16px; font-weight:600; color:var(--ink-1); }
+.stat .sub { font-size:11px; color:var(--ink-2); }
+.nextwin { font-size:12px; color:var(--ink-2); margin-top:6px; }
+.nextwin strong { color:var(--ink-1); font-weight:600; }
+
+/* status chips — icon + label, never color alone */
+.chip {
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:20px;
+  color:#fff;
+}
+.chip .ic { font-size:10px; }
+.chip.good { background:var(--st-good); }
+.chip.warn { background:var(--st-warn); color:#3a2a00; }
+.chip.serious { background:var(--st-serious); color:#3d1400; }
+.chip.critical { background:var(--st-critical); }
+.chip.ghost { background:var(--chip-bg); color:var(--ink-2); font-weight:600; }
+
+/* status strip */
+.strip { margin-top:10px; }
+.strip svg { display:block; width:100%; }
+
+/* ---------- detail ---------- */
+.backbtn { background:none; border:none; color:var(--accent); font-size:14px; font-weight:600; cursor:pointer; padding:0 0 10px; }
+.detailhead { display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
+.detailhead h2 { font-size:20px; letter-spacing:-0.02em; }
+.inletnote { font-size:13px; color:var(--ink-2); margin:2px 0 12px; max-width:640px; }
+.windowlist { display:flex; flex-direction:column; gap:6px; margin:10px 0 4px; }
+.windowrow {
+  display:flex; align-items:center; gap:10px; background:var(--surface-1);
+  border:1px solid var(--hairline); border-radius:10px; padding:8px 12px; font-size:13px;
+}
+.windowrow .when { font-weight:600; color:var(--ink-1); min-width:150px; }
+.windowrow .why { color:var(--ink-2); font-size:12px; }
+.panel {
+  background:var(--surface-1); border:1px solid var(--hairline); border-radius:14px;
+  padding:14px; margin:12px 0; box-shadow:var(--shadow);
+}
+.panel h4 { font-size:13px; color:var(--ink-1); margin-bottom:2px; }
+.panel .psub { font-size:12px; color:var(--ink-3); margin-bottom:8px; }
+.panelhead { display:flex; align-items:baseline; gap:10px; }
+.panelhead .spacer { flex:1; }
+.legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--ink-2); align-items:center; }
+.legend .key { display:inline-flex; align-items:center; gap:6px; }
+.legend .lk { width:14px; height:2px; border-radius:1px; display:inline-block; }
+.legend .sw { width:10px; height:10px; border-radius:3px; display:inline-block; }
+.factorchips { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+.fchip {
+  font-size:12px; padding:5px 10px; border-radius:8px; background:var(--chip-bg);
+  color:var(--ink-2); display:inline-flex; gap:6px; align-items:center;
+}
+.fchip b { color:var(--ink-1); font-weight:600; }
+.tablewrap { overflow-x:auto; margin-top:10px; }
+table.data { border-collapse:collapse; width:100%; font-size:12px; }
+table.data th {
+  text-align:left; color:var(--ink-3); font-weight:600; padding:6px 10px 6px 0;
+  border-bottom:1px solid var(--grid); white-space:nowrap;
+}
+table.data td { padding:5px 10px 5px 0; border-bottom:1px solid var(--grid); color:var(--ink-2); white-space:nowrap; font-variant-numeric:tabular-nums; }
+table.data td:first-child { color:var(--ink-1); }
+
+/* charts */
+.chart { position:relative; }
+.chart svg { display:block; width:100%; overflow:visible; }
+.tooltip {
+  position:fixed; z-index:90; pointer-events:none; display:none;
+  background:var(--surface-1); border:1px solid var(--hairline); border-radius:10px;
+  box-shadow:var(--shadow); padding:8px 10px; font-size:12px; min-width:130px; max-width:230px;
+}
+.tooltip .tt-title { color:var(--ink-3); font-size:11px; margin-bottom:4px; }
+.tooltip .tt-row { display:flex; align-items:center; gap:7px; padding:1.5px 0; }
+.tooltip .tt-key { width:12px; height:2px; border-radius:1px; flex:none; }
+.tooltip .tt-val { font-weight:700; color:var(--ink-1); }
+.tooltip .tt-lbl { color:var(--ink-2); }
+
+/* map */
+.mappanel { padding:10px 10px 6px; margin:0 0 14px; }
+.mappanel .chart { max-width:700px; margin:0 auto; }
+.mappanel .maphead .spacer { flex:1; }
+.laybtn {
+  font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; cursor:pointer;
+  background:none; border:1px solid var(--hairline); color:var(--ink-3); margin-left:4px;
+}
+.laybtn.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+.mapreadout {
+  position:absolute; left:10px; bottom:10px; display:none; pointer-events:none;
+  background:var(--surface-1); border:1px solid var(--hairline); border-radius:8px;
+  padding:3px 8px; font-size:11px; font-weight:600; color:var(--ink-2); box-shadow:var(--shadow);
+}
+.sstlegend { display:flex; align-items:center; gap:8px; font-size:10.5px; color:var(--ink-3); padding:6px 4px 2px; max-width:700px; margin:0 auto; }
+.sstlegend .sstbar { flex:0 0 140px; height:8px; border-radius:4px; display:inline-block; }
+.sstlegend .sstnote { margin-left:auto; }
+.mappanel .maphead { display:flex; align-items:baseline; gap:10px; padding:2px 4px 6px; }
+.mappanel .maphead h4 { font-size:13px; }
+.mappanel .maphead span { font-size:11px; color:var(--ink-3); }
+
+/* offshore planner */
+.daycards { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:10px; margin-top:8px; }
+.daycard { background:var(--surface-1); border:1px solid var(--hairline); border-radius:12px; padding:12px; box-shadow:var(--shadow); }
+.daycard h5 { font-size:13px; display:flex; gap:8px; align-items:center; justify-content:space-between; }
+.segrow { display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--ink-2); padding:4px 0; border-bottom:1px solid var(--grid); }
+.segrow:last-child { border-bottom:none; }
+.segrow .segname { color:var(--ink-2); }
+.segrow .segval { font-weight:600; color:var(--ink-1); font-size:12px; display:flex; gap:6px; align-items:center; }
+.segdot { width:9px; height:9px; border-radius:50%; display:inline-block; border:2px solid var(--surface-1); }
+
+/* method */
+.method p { margin:0 0 12px; max-width:680px; color:var(--ink-2); font-size:14px; }
+.method h4 { margin:16px 0 4px; font-size:14px; }
+.method .sig { color:var(--ink-3); font-size:13px; margin-top:16px; }
+
+/* outlook */
+.outlook { font-size:14px; color:var(--ink-2); }
+.outlook .byline { font-size:12px; color:var(--ink-3); margin-bottom:8px; }
+.outlook p { margin-bottom:10px; }
+
+/* footer disclaimer */
+footer.disc {
+  position:fixed; bottom:0; left:0; right:0; z-index:50;
+  background:var(--page); border-top:1px solid var(--hairline);
+  padding:8px 16px; font-size:11px; color:var(--ink-3); text-align:center;
+}
+@media (max-width:640px) {
+  .cardgrid { grid-template-columns:1fr; }
+  main { padding:12px; }
+}
+</style>
+</head>
+<body>
+<header class="app">
+  <div class="brandrow">
+    <span class="logo">Inlet<span class="cast">Cast</span></span>
+    <span class="proto-tag">Prototype</span>
+    <span class="mode-badge" id="modeBadge"><span class="dot"></span><span id="modeText">Loading…</span></span>
+    <span class="spacer"></span>
+    <a class="iconbtn betabtn" href="mailto:andrew.kammerer@gts-llc.biz?subject=Add%20me%20to%20the%20InletCast%20beta%20list&body=Home%20inlet%3A%20%0ABoat%3A%20%0AWhat%20I%20fish%2Frun%20for%3A%20">Get beta updates</a>
+    <button class="iconbtn" id="themeBtn" title="Toggle theme" aria-label="Toggle color theme">◐</button>
+  </div>
+  <div class="filters" role="group" aria-label="Global filters">
+    <label for="boatSel">Boat</label>
+    <select id="boatSel">
+      <option value="1.25">18–22 ft</option>
+      <option value="1.0" selected>23–27 ft</option>
+      <option value="0.8">28 ft +</option>
+    </select>
+    <label for="areaSel">Area</label>
+    <select id="areaSel">
+      <option value="all" selected>All areas</option>
+      <option value="Topsail">Topsail</option>
+      <option value="Wilmington">Wilmington</option>
+      <option value="Crystal Coast">Crystal Coast</option>
+    </select>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button data-view="inlets" class="active">Inlets</button>
+    <button data-view="offshore">Offshore planner</button>
+    <button data-view="models">Model agreement</button>
+    <button data-view="method">Method</button>
+  </nav>
+</header>
+
+<main>
+  <div class="notice" id="banner">
+    <div><strong>Decision support, not a decision.</strong> InletCast summarizes model guidance about inlet and offshore conditions. It does not know your boat, your crew, or what the water looks like today. Local knowledge, official NWS forecasts, and your own judgment come first.</div>
+    <button id="bannerClose" aria-label="Dismiss">✕</button>
+  </div>
+
+  <section class="view active" id="view-inlets">
+    <h2 class="viewtitle">Inlet condition windows — next 72 hours</h2>
+    <p class="viewsub" id="inletsSub">Crossing-condition outlook for Southeast NC inlets, scored from wave, wind, and tide-phase guidance.</p>
+    <div class="panel mappanel" id="coastPanel"></div>
+    <div class="cardgrid" id="inletCards"></div>
+  </section>
+
+  <section class="view" id="view-detail"></section>
+
+  <section class="view" id="view-offshore">
+    <h2 class="viewtitle">Offshore trip planner — next 7 days</h2>
+    <p class="viewsub">Day scores for the run out, hours on the grounds, and the run home. Pick your departure inlet and destination.</p>
+    <div class="filters">
+      <label for="depSel">Departure</label>
+      <select id="depSel"></select>
+      <label for="zoneSel">Destination</label>
+      <select id="zoneSel"></select>
+    </div>
+    <div id="offshoreBody"></div>
+  </section>
+
+  <section class="view" id="view-models">
+    <h2 class="viewtitle">Do the models agree?</h2>
+    <p class="viewsub">GFS-Wave vs ECMWF-WAM at each inlet's sea buoy point. When they diverge, treat every forecast — ours included — with more caution. We show you the spread instead of hiding it.</p>
+    <div class="filters">
+      <label for="modelInletSel">Inlet</label>
+      <select id="modelInletSel"></select>
+    </div>
+    <div id="modelsBody"></div>
+  </section>
+
+  <section class="view" id="view-method">
+    <h2 class="viewtitle">How InletCast works</h2>
+    <div class="method" id="methodBody"></div>
+  </section>
+</main>
+
+<div class="tooltip" id="tooltip" role="status"></div>
+<footer class="disc">Guidance only — never a statement that a crossing is safe. Verify against official NWS marine forecasts &amp; local observations. © 2026 Ghosttree Technical Solutions, LLC · InletCast prototype v0.5</footer>
+<script>
+'use strict';
+/* ============ InletCast prototype — core: config, data, scoring ============ */
+
+const CONFIG = {
+  hoursDetail: 72,
+  hoursPlanner: 168,
+  inlets: [
+    { id:'newtopsail', name:'New Topsail Inlet', short:'New Topsail', area:'Topsail',
+      lat:34.342, lon:-77.645, wLat:34.30, wLon:-77.58, tideSta:'8658163', tideName:'Wrightsville Beach (proxy)',
+      bearing:140, shoal:1.30,
+      note:'Unjettied and migrating; the outer bar shifts after every blow. Ebb against a SE ground swell stacks it up fast on the bar.' },
+    { id:'newriver', name:'New River Inlet', short:'New River', area:'Topsail',
+      lat:34.527, lon:-77.336, wLat:34.48, wLon:-77.28, tideSta:'8658163', tideName:'Wrightsville Beach (proxy)',
+      bearing:138, shoal:1.35,
+      note:'Shoaly and narrow; local knowledge matters more than anywhere else on this stretch. Short-period wind swell closes it out quickly.' },
+    { id:'masonboro', name:'Masonboro Inlet', short:'Masonboro', area:'Wilmington',
+      lat:34.182, lon:-77.801, wLat:34.14, wLon:-77.74, tideSta:'8658163', tideName:'Wrightsville Beach',
+      bearing:112, shoal:1.00,
+      note:'Dual-jettied and maintained — the most forgiving inlet on this coast, but a strong ebb against an E–SE swell still makes the entrance sloppy.' },
+    { id:'carolinabeach', name:'Carolina Beach Inlet', short:'Carolina Bch', area:'Wilmington',
+      lat:34.076, lon:-77.876, wLat:34.04, wLon:-77.82, tideSta:'8658163', tideName:'Wrightsville Beach (proxy)',
+      bearing:120, shoal:1.50,
+      note:'Notoriously shoal, unjettied, and dredge-dependent. Breaks across the channel in a modest ESE swell — the classic "looked fine from inside" inlet.' },
+    { id:'capefear', name:'Cape Fear River Entrance', short:'Cape Fear', area:'Wilmington',
+      lat:33.843, lon:-78.011, wLat:33.78, wLon:-77.97, tideSta:'8659084', tideName:'Southport',
+      bearing:172, shoal:0.95,
+      note:'Big, deep shipping channel — but a long-period S swell against max ebb over Frying Pan Shoals rips. Watch commercial traffic.' },
+    { id:'bogue', name:'Bogue Inlet', short:'Bogue', area:'Crystal Coast',
+      lat:34.641, lon:-77.105, wLat:34.58, wLon:-77.07, tideSta:'8656483', tideName:'Beaufort (proxy)',
+      bearing:158, shoal:1.35,
+      note:'Channel wanders between dredge cycles. S–SE swell over the bar on the ebb is the hazard pattern.' },
+    { id:'beaufort', name:'Beaufort Inlet', short:'Beaufort', area:'Crystal Coast',
+      lat:34.662, lon:-76.674, wLat:34.60, wLon:-76.64, tideSta:'8656483', tideName:'Beaufort, Duke Marine Lab',
+      bearing:175, shoal:0.90,
+      note:'Deep, marked shipping channel to Morehead City — the standard Big Rock departure. Ebb chop at the sea buoy in a S blow, but rarely closes.' },
+  ],
+  zones: [
+    { id:'bigrock', name:'The Big Rock zone (off Beaufort)', lat:34.20, lon:-75.90, run_nm:50,
+      note:'~50 nm SSE of Beaufort Inlet toward the 100-fathom curve.' },
+    { id:'sameole', name:'Gulf Stream — Same Ole / Steeples (off Masonboro)', lat:33.70, lon:-77.05, run_nm:55,
+      note:'~55 nm SE of Masonboro Inlet.' },
+  ],
+  boats: { '1.25':'18–22 ft', '1.0':'23–27 ft', '0.8':'28 ft +' },
+};
+
+/* ---------------- schematic coast map data ---------------- */
+const MAPDATA = {
+  bounds: { lonMin:-78.32, lonMax:-75.55, latMin:33.48, latMax:34.99 },
+  // simplified shoreline, SW → NE (lon, lat)
+  coast: [
+    [-78.32,33.92],[-78.10,33.91],[-78.02,33.90],[-77.99,33.87],[-77.963,33.843],
+    [-77.93,33.95],[-77.90,34.02],[-77.876,34.076],[-77.84,34.13],[-77.80,34.18],
+    [-77.79,34.22],[-77.74,34.29],[-77.645,34.34],[-77.54,34.43],[-77.42,34.50],
+    [-77.336,34.53],[-77.24,34.58],[-77.15,34.62],[-77.105,34.64],[-76.95,34.67],
+    [-76.80,34.695],[-76.674,34.695],[-76.60,34.67],[-76.53,34.60],[-76.51,34.63],[-76.52,34.72]
+  ],
+  // gulf stream band control points (lon,lat): start, quadratic control, end
+  gulfstream: { a:[-77.75,33.36], c:[-76.65,33.95], b:[-75.63,34.62] },
+  bayLabel: { lon:-77.35, lat:34.22, text:'Onslow Bay' },
+  labels: {
+    newtopsail:   {dx:9,  dy:3,  anchor:'start'},
+    newriver:     {dx:9,  dy:0,  anchor:'start'},
+    masonboro:    {dx:9,  dy:1,  anchor:'start'},
+    carolinabeach:{dx:9,  dy:11, anchor:'start'},
+    capefear:     {dx:2,  dy:16, anchor:'middle'},
+    bogue:        {dx:-2, dy:17, anchor:'middle'},
+    beaufort:     {dx:9,  dy:13, anchor:'start'},
+  },
+  zoneLabels: { bigrock:{dx:0,dy:18,anchor:'middle',text:'Big Rock'}, sameole:{dx:0,dy:18,anchor:'middle',text:'Same Ole / Steeples'} },
+  // cross-shelf SST transects (inshore → offshore) for Gulf Stream west-wall detection
+  transects: [
+    { name:'Cape Fear',  lon0:-77.95, lat0:33.80, dLon:0.085, dLat:-0.062, n:10 },
+    { name:'Masonboro',  lon0:-77.75, lat0:34.12, dLon:0.090, dLat:-0.058, n:10 },
+    { name:'Topsail',    lon0:-77.58, lat0:34.30, dLon:0.095, dLat:-0.055, n:10 },
+    { name:'Bogue',      lon0:-77.05, lat0:34.58, dLon:0.085, dLat:-0.065, n:10 },
+    { name:'Lookout',    lon0:-76.55, lat0:34.55, dLon:0.075, dLat:-0.070, n:10 },
+  ],
+};
+function transectPoints(){
+  const pts=[];
+  MAPDATA.transects.forEach((tr,ti)=>{
+    for(let i=0;i<tr.n;i++) pts.push({ti, i, lon:tr.lon0+tr.dLon*i, lat:tr.lat0+tr.dLat*i});
+  });
+  return pts;
+}
+
+const state = {
+  mode: 'demo',            // 'live' | 'demo' | 'mixed'
+  liveNote: '',
+  boatFactor: 1.0,
+  boatKey: '1.0',
+  area: 'all',
+  layers: { sst:true, wind:true },
+  view: 'inlets',
+  detailInlet: null,
+  showTable: {},
+  data: null,              // { inlets:{id:{hours:[...]}}, zones:{id:{hours}}, tides:{sta:[{t,v}]} }
+  scored: null,
+  fetchedAt: null,
+};
+
+/* ---------------- utils ---------------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+function hashCode(s){let h=0;for(let i=0;i<s.length;i++){h=(h<<5)-h+s.charCodeAt(i)|0;}return h>>>0;}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function compass(deg){const d=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];return d[Math.round(((deg%360)+360)%360/22.5)%16];}
+function angDiff(a,b){let d=Math.abs(a-b)%360;return d>180?360-d:d;}
+function ft(v){return v==null?'–':v.toFixed(1);}
+function pad2(n){return String(n).padStart(2,'0');}
+function hourLabel(d){let h=d.getHours();const ap=h>=12?'p':'a';h=h%12;if(h===0)h=12;return h+ap;}
+function dayLabel(d){return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];}
+function timeRangeLabel(a,b){
+  const sameDay=a.getDate()===b.getDate();
+  const f=(d)=>{let h=d.getHours();const ap=h>=12?'pm':'am';h=h%12;if(h===0)h=12;return h+(d.getMinutes()?':'+pad2(d.getMinutes()):'')+ap;};
+  return dayLabel(a)+' '+f(a)+'–'+(sameDay?'':dayLabel(b)+' ')+f(b);
+}
+function ymd(d){return d.getFullYear()+''+pad2(d.getMonth()+1)+pad2(d.getDate());}
+
+/* ---------------- live data ---------------- */
+async function fetchJSON(url, timeoutMs=9000){
+  const ctrl=new AbortController();
+  const to=setTimeout(()=>ctrl.abort(),timeoutMs);
+  try{
+    const r=await fetch(url,{signal:ctrl.signal});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return await r.json();
+  } finally { clearTimeout(to); }
+}
+
+// Marine API with two wave models -> suffixed keys. We normalize to {t[], gfs:{hs,tp,dir}, ecmwf:{hs,tp,dir}}
+async function fetchMarine(lat,lon){
+  const url='https://marine-api.open-meteo.com/v1/marine?latitude='+lat+'&longitude='+lon
+    +'&hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction'
+    +'&models=gfs_wave025,ecmwf_wam025&length_unit=imperial&timezone=America%2FNew_York&forecast_days=8';
+  const j=await fetchJSON(url);
+  const h=j.hourly||{};
+  const pick=(base,model)=>h[base+'_'+model]||h[base]||[];
+  return {
+    t:(h.time||[]).map(s=>new Date(s)),
+    gfs:{ hs:pick('wave_height','gfs_wave025'), tp:pick('wave_period','gfs_wave025'), dir:pick('wave_direction','gfs_wave025'),
+          shs:pick('swell_wave_height','gfs_wave025'), stp:pick('swell_wave_period','gfs_wave025'), sdir:pick('swell_wave_direction','gfs_wave025') },
+    ecmwf:{ hs:pick('wave_height','ecmwf_wam025'), tp:pick('wave_period','ecmwf_wam025'), dir:pick('wave_direction','ecmwf_wam025'),
+            shs:pick('swell_wave_height','ecmwf_wam025'), stp:pick('swell_wave_period','ecmwf_wam025'), sdir:pick('swell_wave_direction','ecmwf_wam025') },
+  };
+}
+async function fetchWind(lat,lon){
+  const url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon
+    +'&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m'
+    +'&models=gfs_seamless,ecmwf_ifs025&wind_speed_unit=kn&timezone=America%2FNew_York&forecast_days=8';
+  const j=await fetchJSON(url);
+  const h=j.hourly||{};
+  const pick=(base,model)=>h[base+'_'+model]||h[base]||[];
+  return {
+    t:(h.time||[]).map(s=>new Date(s)),
+    gfs:{ spd:pick('wind_speed_10m','gfs_seamless'), dir:pick('wind_direction_10m','gfs_seamless'), gst:pick('wind_gusts_10m','gfs_seamless') },
+    ecmwf:{ spd:pick('wind_speed_10m','ecmwf_ifs025'), dir:pick('wind_direction_10m','ecmwf_ifs025'), gst:pick('wind_gusts_10m','ecmwf_ifs025') },
+  };
+}
+async function fetchTides(sta){
+  const now=new Date(); const end=new Date(now.getTime()+8*864e5);
+  const url='https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=inletcast_prototype'
+    +'&begin_date='+ymd(now)+'&end_date='+ymd(end)+'&datum=MLLW&station='+sta
+    +'&time_zone=lst_ldt&units=english&interval=h&format=json';
+  const j=await fetchJSON(url);
+  if(!j.predictions) throw new Error('no predictions');
+  return j.predictions.map(p=>({t:new Date(p.t.replace(' ','T')), v:parseFloat(p.v)}));
+}
+
+/* ---------- Gulf Stream SST front (live NWP SST via multi-point call) ---------- */
+async function fetchSSTField(){
+  const pts=transectPoints();
+  const url='https://marine-api.open-meteo.com/v1/marine?latitude='+pts.map(p=>p.lat.toFixed(3)).join(',')
+    +'&longitude='+pts.map(p=>p.lon.toFixed(3)).join(',')
+    +'&hourly=sea_surface_temperature&forecast_days=1&timezone=America%2FNew_York';
+  const j=await fetchJSON(url,12000);
+  const locs=Array.isArray(j)?j:[j];
+  if(locs.length!==pts.length) throw new Error('sst point count mismatch');
+  const hourIdx=Math.min(new Date().getHours(), (locs[0].hourly&&locs[0].hourly.time?locs[0].hourly.time.length-1:0));
+  return pts.map((p,k)=>{
+    const arr=(locs[k].hourly&&locs[k].hourly.sea_surface_temperature)||[];
+    const v=arr[hourIdx];
+    return {...p, sst:(v==null||Number.isNaN(v))?null:v};
+  });
+}
+function makeDemoSST(){
+  // demo: logistic front along a meandering reference line from SW to NE
+  const rnd=mulberry32(hashCode('gulfstream'+new Date().getDate()));
+  const ph=rnd()*Math.PI*2, meander=0.10+rnd()*0.08;
+  const A={lon:-77.45,lat:33.48}, B={lon:-75.75,lat:34.55};
+  const dx=B.lon-A.lon, dy=B.lat-A.lat, L=Math.hypot(dx,dy);
+  const nx=-dy/L, ny=dx/L; // normal (offshore-positive-ish)
+  return function(lon,lat){
+    const t=((lon-A.lon)*dx+(lat-A.lat)*dy)/(L*L);
+    const wig=meander*Math.sin(t*5+ph);
+    const d=((lon-A.lon)*nx+(lat-A.lat)*ny)-wig;
+    return +(26.6+2.6/(1+Math.exp(d/0.11))+0.15*Math.sin(lon*9+ph)).toFixed(2);
+  };
+}
+function synthSSTField(){
+  const f=makeDemoSST();
+  return transectPoints().map(p=>({...p, sst:f(p.lon,p.lat)}));
+}
+
+/* ---------- gridded SST + wind fields for map overlays ---------- */
+const GRID={lonMin:-78.25, lonMax:-75.60, latMin:33.52, latMax:34.95, dLon:0.20, dLat:0.18};
+function landPolygon(){
+  const last=MAPDATA.coast[MAPDATA.coast.length-1];
+  return MAPDATA.coast.concat([[last[0],MAPDATA.bounds.latMax+0.1],[MAPDATA.bounds.lonMin-0.1,MAPDATA.bounds.latMax+0.1]]);
+}
+function pointInLand(lon,lat){
+  const poly=landPolygon(); let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1];
+    if(((yi>lat)!==(yj>lat)) && (lon < (xj-xi)*(lat-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+function nearCoast(lon,lat,buf){
+  return MAPDATA.coast.some(([clo,cla])=>Math.hypot(lon-clo,lat-cla)<buf);
+}
+function buildGrid(){
+  const lons=[],lats=[];
+  for(let lo=GRID.lonMin;lo<=GRID.lonMax+1e-9;lo+=GRID.dLon) lons.push(+lo.toFixed(3));
+  for(let la=GRID.latMin;la<=GRID.latMax+1e-9;la+=GRID.dLat) lats.push(+la.toFixed(3));
+  const ocean=[];
+  lats.forEach((la,i)=>lons.forEach((lo,j)=>{
+    if(!pointInLand(lo,la)&&!nearCoast(lo,la,0.09)) ocean.push({i,j,lon:lo,lat:la});
+  }));
+  return {lons,lats,ocean};
+}
+function emptyGrid2D(ny,nx){return Array.from({length:ny},()=>Array(nx).fill(null));}
+async function fetchGridFields(g){
+  const latQ=g.ocean.map(p=>p.lat.toFixed(3)).join(','), lonQ=g.ocean.map(p=>p.lon.toFixed(3)).join(',');
+  const [mj,wj]=await Promise.all([
+    fetchJSON('https://marine-api.open-meteo.com/v1/marine?latitude='+latQ+'&longitude='+lonQ
+      +'&hourly=sea_surface_temperature&forecast_days=1&timezone=America%2FNew_York',14000),
+    fetchJSON('https://api.open-meteo.com/v1/forecast?latitude='+latQ+'&longitude='+lonQ
+      +'&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=kn&forecast_days=1&timezone=America%2FNew_York',14000),
+  ]);
+  const mArr=Array.isArray(mj)?mj:[mj], wArr=Array.isArray(wj)?wj:[wj];
+  if(mArr.length!==g.ocean.length||wArr.length!==g.ocean.length) throw new Error('grid count mismatch');
+  const hr=new Date().getHours();
+  const sst=emptyGrid2D(g.lats.length,g.lons.length), wspd=emptyGrid2D(g.lats.length,g.lons.length), wdir=emptyGrid2D(g.lats.length,g.lons.length);
+  g.ocean.forEach((p,k)=>{
+    const mh=(mArr[k].hourly||{}), wh=(wArr[k].hourly||{});
+    const idxM=Math.min(hr,(mh.time||[]).length-1), idxW=Math.min(hr,(wh.time||[]).length-1);
+    const s=(mh.sea_surface_temperature||[])[idxM];
+    sst[p.i][p.j]=(s==null||Number.isNaN(s))?null:s;
+    const ws=(wh.wind_speed_10m||[])[idxW], wd=(wh.wind_direction_10m||[])[idxW];
+    wspd[p.i][p.j]=(ws==null||Number.isNaN(ws))?null:ws;
+    wdir[p.i][p.j]=(wd==null||Number.isNaN(wd))?null:wd;
+  });
+  return {sst,wspd,wdir};
+}
+/* MUR 1-km satellite-blended SST analysis via NOAA CoastWatch ERDDAP (CORS-open).
+   Preferred SST source — resolves real Gulf Stream structure that smoothed
+   NWP-analysis SST misses, especially in summer when the wall contrast is weak. */
+async function fetchMURGrid(){
+  const stride=12; // 0.01° native × 12 ≈ 0.12°
+  const url='https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.json?analysed_sst'
+    +'%5B(last)%5D'
+    +'%5B('+GRID.latMin+'):'+stride+':('+GRID.latMax+')%5D'
+    +'%5B('+GRID.lonMin+'):'+stride+':('+GRID.lonMax+')%5D';
+  const j=await fetchJSON(url,15000);
+  const t=j.table; if(!t||!t.rows||!t.rows.length) throw new Error('no rows');
+  const ci={}; t.columnNames.forEach((c,k)=>ci[c]=k);
+  const latSet=new Set(), lonSet=new Set();
+  t.rows.forEach(r=>{latSet.add(r[ci.latitude]); lonSet.add(r[ci.longitude]);});
+  const lats=[...latSet].sort((a,b)=>a-b), lons=[...lonSet].sort((a,b)=>a-b);
+  const li={},lj={}; lats.forEach((v,k)=>li[v]=k); lons.forEach((v,k)=>lj[v]=k);
+  const sst=emptyGrid2D(lats.length,lons.length);
+  let n=0;
+  t.rows.forEach(r=>{
+    let v=r[ci.analysed_sst];
+    if(v==null||Number.isNaN(v)) return;
+    if(v>200) v-=273.15; // Kelvin-served variants
+    sst[li[r[ci.latitude]]][lj[r[ci.longitude]]]=v; n++;
+  });
+  if(n<20) throw new Error('too few valid cells');
+  return {lats,lons,sst,time:t.rows[0][ci.time]||null,source:'mur'};
+}
+
+function demoGridFields(g){
+  const f=makeDemoSST();
+  const rnd=mulberry32(hashCode('gridwind'+new Date().getDate()));
+  const ph=rnd()*Math.PI*2;
+  const sst=emptyGrid2D(g.lats.length,g.lons.length), wspd=emptyGrid2D(g.lats.length,g.lons.length), wdir=emptyGrid2D(g.lats.length,g.lons.length);
+  g.ocean.forEach(p=>{
+    sst[p.i][p.j]=f(p.lon,p.lat);
+    wspd[p.i][p.j]=+(9+6*Math.sin(p.lon*2.2+ph)+4*Math.cos(p.lat*3.1+ph*1.3)).toFixed(1);
+    wdir[p.i][p.j]=Math.round((215+45*Math.sin(p.lon*1.8+p.lat*1.2+ph)+360)%360);
+  });
+  return {sst,wspd,wdir};
+}
+function detectFront(field){
+  // per transect: strongest along-transect SST step (warm side offshore = negative step inshore→offshore? here inshore cooler)
+  const byT={};
+  field.forEach(p=>{(byT[p.ti]=byT[p.ti]||[]).push(p);});
+  const front=[];
+  Object.keys(byT).sort((a,b)=>a-b).forEach(ti=>{
+    const pts=byT[ti].sort((a,b)=>a.i-b.i);
+    let best=null;
+    for(let i=1;i<pts.length;i++){
+      if(pts[i].sst==null||pts[i-1].sst==null) continue;
+      const g=pts[i].sst-pts[i-1].sst; // warming offshore
+      if(!best||g>best.g) best={g, lon:(pts[i].lon+pts[i-1].lon)/2, lat:(pts[i].lat+pts[i-1].lat)/2,
+        inshore:pts[i-1].sst, offshore:pts[i].sst, name:MAPDATA.transects[ti].name};
+    }
+    if(best) front.push({...best, weak:best.g<0.5});
+  });
+  return front;
+}
+function synthPoint(seedStr, start, nHours){
+  const rnd=mulberry32(hashCode(seedStr));
+  const p1=rnd()*Math.PI*2, p2=rnd()*Math.PI*2, p3=rnd()*Math.PI*2;
+  const stormT=40+rnd()*70, stormMag=1.4+rnd()*2.2;
+  const t=[], gfs={hs:[],tp:[],dir:[],shs:[],stp:[],sdir:[]}, ecmwf={hs:[],tp:[],dir:[],shs:[],stp:[],sdir:[]};
+  const wg={spd:[],dir:[],gst:[]}, we={spd:[],dir:[],gst:[]};
+  for(let i=0;i<nHours;i++){
+    const d=new Date(start.getTime()+i*36e5); t.push(d);
+    const hod=d.getHours();
+    // synoptic wind: builds ahead of the "front", veers after
+    const front=Math.exp(-Math.pow((i-stormT)/16,2));
+    const synW=9+6*Math.sin(i/34+p1)+13*front;
+    const seaBreeze=Math.max(0,5*Math.sin((hod-9)/10*Math.PI))*(i<stormT?1:0.5);
+    const wspd=Math.max(3,synW+seaBreeze+2*Math.sin(i/7+p2));
+    const wdir=(200+60*Math.sin(i/45+p3)+(i>stormT? -140:0)+360)%360;
+    // swell: background SE + storm bump, period lengthens after event
+    const shs=1.6+0.8*Math.sin(i/50+p2)+stormMag*Math.exp(-Math.pow((i-stormT-8)/20,2));
+    const stp=8.5+2.2*Math.sin(i/60+p1)+3*Math.exp(-Math.pow((i-stormT-20)/26,2));
+    const windsea=Math.pow(Math.max(0,wspd-8)/10,1.5)*1.6;
+    const hs=Math.sqrt(shs*shs+windsea*windsea);
+    const tp=windsea>shs?Math.max(4.5,4+wspd*0.14):stp;
+    const dir=(115+25*Math.sin(i/70+p3)+360)%360;
+    gfs.hs.push(+hs.toFixed(2)); gfs.tp.push(+tp.toFixed(1)); gfs.dir.push(Math.round(dir));
+    gfs.shs.push(+shs.toFixed(2)); gfs.stp.push(+stp.toFixed(1)); gfs.sdir.push(Math.round(dir));
+    // "second model": correlated but diverging with lead time
+    const spread=(0.12+0.55*i/nHours);
+    const e=hs*(1+spread*Math.sin(i/22+p1*2))+0.15*Math.sin(i/9+p3);
+    ecmwf.hs.push(+Math.max(0.4,e).toFixed(2)); ecmwf.tp.push(+(tp*(1+0.1*Math.sin(i/30+p2))).toFixed(1)); ecmwf.dir.push(Math.round((dir+8*Math.sin(i/40))%360));
+    ecmwf.shs.push(+Math.max(0.3,shs*(1+spread*0.6*Math.sin(i/25+p2))).toFixed(2)); ecmwf.stp.push(+(stp*(1+0.08*Math.sin(i/33))).toFixed(1)); ecmwf.sdir.push(Math.round(dir));
+    wg.spd.push(+wspd.toFixed(1)); wg.dir.push(Math.round(wdir)); wg.gst.push(+(wspd*1.35).toFixed(1));
+    const ew=wspd*(1+spread*0.5*Math.sin(i/18+p3));
+    we.spd.push(+Math.max(2,ew).toFixed(1)); we.dir.push(Math.round((wdir+10*Math.sin(i/25))%360)); we.gst.push(+(ew*1.35).toFixed(1));
+  }
+  return { marine:{t,gfs,ecmwf}, wind:{t,gfs:wg,ecmwf:we} };
+}
+function synthTide(sta, start, nHours){
+  const rnd=mulberry32(hashCode('tide'+sta));
+  const phase=rnd()*12, amp=1.8+rnd()*0.5, msl=2.15;
+  const out=[];
+  for(let i=0;i<nHours;i++){
+    const d=new Date(start.getTime()+i*36e5);
+    const hrs=(d.getTime()/36e5);
+    const v=msl+amp*Math.cos(2*Math.PI*(hrs-phase)/12.4206)+0.35*Math.cos(2*Math.PI*hrs/12+phase);
+    out.push({t:d, v:+v.toFixed(2)});
+  }
+  return out;
+}
+
+/* ---------------- load ---------------- */
+async function loadData(){
+  const start=new Date(); start.setMinutes(0,0,0);
+  const n=CONFIG.hoursPlanner+24;
+  const data={inlets:{}, zones:{}, tides:{}};
+  let liveOK=0, liveFail=0;
+
+  const jobs=[];
+  for(const inl of CONFIG.inlets){
+    jobs.push((async()=>{
+      try{
+        const [m,w]=await Promise.all([fetchMarine(inl.wLat,inl.wLon), fetchWind(inl.wLat,inl.wLon)]);
+        if(!m.t.length||!w.t.length) throw new Error('empty');
+        data.inlets[inl.id]={marine:m, wind:w, live:true}; liveOK++;
+      }catch(e){ data.inlets[inl.id]={...synthPoint('inlet'+inl.id,start,n), live:false}; liveFail++; }
+    })());
+  }
+  for(const z of CONFIG.zones){
+    jobs.push((async()=>{
+      try{
+        const [m,w]=await Promise.all([fetchMarine(z.lat,z.lon), fetchWind(z.lat,z.lon)]);
+        if(!m.t.length||!w.t.length) throw new Error('empty');
+        data.zones[z.id]={marine:m, wind:w, live:true}; liveOK++;
+      }catch(e){ data.zones[z.id]={...synthPoint('zone'+z.id,start,n), live:false}; liveFail++; }
+    })());
+  }
+  jobs.push((async()=>{
+    try{ data.murGrid=await fetchMURGrid(); liveOK++; }
+    catch(e){ data.murGrid=null; } // silent enhancement — NWP grid is the fallback
+  })());
+  const grid=buildGrid();
+  jobs.push((async()=>{
+    try{
+      const f=await fetchGridFields(grid);
+      if(!f.sst.flat().some(v=>v!=null)) throw new Error('all null');
+      data.grid={...grid, ...f, live:true}; liveOK++;
+    }catch(e){ data.grid={...grid, ...demoGridFields(grid), live:false}; liveFail++; }
+  })());
+  const stations=[...new Set(CONFIG.inlets.map(i=>i.tideSta))];
+  for(const sta of stations){
+    jobs.push((async()=>{
+      try{
+        const t=await fetchTides(sta);
+        if(!t.length) throw new Error('empty');
+        data.tides[sta]=t; liveOK++;
+      }catch(e){ data.tides[sta]=synthTide(sta,start,n); liveFail++; }
+    })());
+  }
+  await Promise.allSettled(jobs);
+  state.mode = liveFail===0 ? 'live' : (liveOK===0 ? 'demo' : 'mixed');
+  state.fetchedAt=new Date();
+  state.data=data;
+}
+
+/* ---------------- scoring ---------------- */
+function seriesAt(arrT, arrV, when){
+  // nearest-hour lookup
+  if(!arrT.length) return null;
+  const i=clamp(Math.round((when-arrT[0])/36e5),0,arrT.length-1);
+  const v=arrV[i];
+  return (v==null||Number.isNaN(v))?null:v;
+}
+function tideSlope(tides, when){
+  if(!tides||tides.length<2) return {slope:0, height:null};
+  const i=clamp(Math.round((when-tides[0].t)/36e5),1,tides.length-1);
+  const slope=tides[i].v-tides[i-1].v;   // ft per hour; negative = falling/ebb
+  return {slope, height:tides[i].v};
+}
+
+function scoreHour(inl, when, boatFactor){
+  const d=state.data.inlets[inl.id]; if(!d) return null;
+  const m=d.marine, w=d.wind;
+  const hsG=seriesAt(m.t,m.gfs.hs,when), hsE=seriesAt(m.t,m.ecmwf.hs,when);
+  const tpG=seriesAt(m.t,m.gfs.tp,when), tpE=seriesAt(m.t,m.ecmwf.tp,when);
+  const dirG=seriesAt(m.t,m.gfs.dir,when);
+  const spdG=seriesAt(w.t,w.gfs.spd,when), spdE=seriesAt(w.t,w.ecmwf.spd,when);
+  const gst=seriesAt(w.t,w.gfs.gst,when);
+  const wdir=seriesAt(w.t,w.gfs.dir,when);
+  if(hsG==null||spdG==null) return null;
+
+  const hs=hsE!=null?(hsG+hsE)/2:hsG;                 // consensus estimate
+  const tp=(tpG!=null&&tpE!=null)?(tpG+tpE)/2:(tpG??tpE??9);
+  const wind=spdE!=null?(spdG+spdE)/2:spdG;
+  const dir=dirG??120;
+
+  const hsEff=hs*boatFactor;
+  // sea state: height + short-period steepness
+  let pSea=clamp((hsEff-2)*9,0,42);
+  if(tp<9) pSea+=clamp((9-tp)*2.2,0,14)*clamp(hsEff/3,0.4,1.6);
+  pSea=clamp(pSea,0,55);
+  // wind
+  const onshore=Math.cos((angDiff(wdir??200,inl.bearing))*Math.PI/180); // >0 blowing in from sea
+  let pWind=clamp((wind-11)*2.1,0,26)+clamp(((gst??wind*1.3)-18)*0.7,0,8);
+  if(onshore>0.3&&wind>12) pWind+=4;
+  pWind=clamp(pWind,0,34);
+  // ebb opposition over the bar
+  const td=tideSlope(state.data.tides[inl.tideSta],when);
+  const ebb=clamp(-td.slope/0.9,0,1);                  // 0..1 ebb strength
+  const opp=clamp(1-angDiff(dir,inl.bearing)/75,0,1);  // swell arriving straight up the channel
+  let pTide=ebb*(0.35+0.65*opp)*inl.shoal*(5+hsEff*3.4+clamp(9-tp,0,4)*1.6);
+  pTide=clamp(pTide,0,38);
+
+  const score=Math.round(clamp(100-pSea-pWind-pTide,0,100));
+  // hazard override
+  let cls;
+  if(hsEff>=8||wind>=25||score<25) cls='critical';
+  else if(score>=70) cls='good';
+  else if(score>=45) cls='warn';
+  else cls='serious';
+  // model spread → confidence
+  const spreadHs=(hsG!=null&&hsE!=null)?Math.abs(hsG-hsE):0;
+  const spreadW=(spdG!=null&&spdE!=null)?Math.abs(spdG-spdE):0;
+  const conf=(spreadHs>1.6||spreadW>7)?'low':(spreadHs>0.9||spreadW>4.5)?'med':'high';
+  return { t:when, score, cls, conf,
+    hs:+hs.toFixed(1), tp:+tp.toFixed(1), dir, wind:+wind.toFixed(0), wdir, gst:gst==null?null:+gst.toFixed(0),
+    tideH:td.height, ebb:+ebb.toFixed(2), opp:+opp.toFixed(2),
+    pSea:Math.round(pSea), pWind:Math.round(pWind), pTide:Math.round(pTide) };
+}
+
+function scoreAll(){
+  const start=new Date(); start.setMinutes(0,0,0);
+  const scored={inlets:{}, start};
+  for(const inl of CONFIG.inlets){
+    const hours=[];
+    for(let i=0;i<CONFIG.hoursPlanner;i++){
+      const h=scoreHour(inl,new Date(start.getTime()+i*36e5),state.boatFactor);
+      if(h) hours.push(h);
+    }
+    scored.inlets[inl.id]=hours;
+  }
+  state.scored=scored;
+}
+
+const CLS_META={
+  good:{label:'Favorable', ic:'✓', color:'var(--st-good)'},
+  warn:{label:'Marginal', ic:'!', color:'var(--st-warn)'},
+  serious:{label:'Rough', ic:'✕', color:'var(--st-serious)'},
+  critical:{label:'Hazardous', ic:'⚠', color:'var(--st-critical)'},
+};
+function clsRank(c){return {good:0,warn:1,serious:2,critical:3}[c];}
+
+function findWindows(hours, horizon){
+  // contiguous 'good' runs >=2h within horizon
+  const wins=[]; let run=null;
+  for(let i=0;i<Math.min(hours.length,horizon);i++){
+    const h=hours[i];
+    if(h.cls==='good'){ if(!run) run={from:h.t, to:h.t, minScore:h.score, conf:h.conf}; else { run.to=h.t; run.minScore=Math.min(run.minScore,h.score); if(h.conf==='low') run.conf='low'; } }
+    else if(run){ if((run.to-run.from)/36e5>=1) wins.push(run); run=null; }
+  }
+  if(run&&(run.to-run.from)/36e5>=1) wins.push(run);
+  return wins;
+}
+
+function whyText(h){
+  const parts=[];
+  parts.push(h.hs+' ft @ '+h.tp+' s from '+compass(h.dir));
+  parts.push(h.wind+' kn '+compass(h.wdir??200));
+  if(h.ebb>0.45&&h.opp>0.4) parts.push('ebb against the swell');
+  else if(h.ebb>0.45) parts.push('ebbing');
+  else if(h.ebb<0.05) parts.push('flooding/slack');
+  return parts.join(' · ');
+}
+
+'use strict';
+/* ============ InletCast prototype — charts & views ============ */
+
+const $=(s,el)=>(el||document).querySelector(s);
+const $$=(s,el)=>[...(el||document).querySelectorAll(s)];
+const tooltip=$('#tooltip');
+const SVGNS='http://www.w3.org/2000/svg';
+function svgEl(tag,attrs,parent){const e=document.createElementNS(SVGNS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+function el(tag,cls,parent,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;if(parent)parent.appendChild(e);return e;}
+
+function showTip(x,y,title,rows){
+  tooltip.textContent='';
+  el('div','tt-title',tooltip,title);
+  for(const r of rows){
+    const row=el('div','tt-row',tooltip);
+    const key=el('span','tt-key',row); key.style.background=r.color||'transparent';
+    el('span','tt-val',row,r.val);
+    el('span','tt-lbl',row,r.lbl);
+  }
+  tooltip.style.display='block';
+  const w=tooltip.offsetWidth,hgt=tooltip.offsetHeight;
+  let left=x+14, top=y-hgt-10;
+  if(left+w>window.innerWidth-8) left=x-w-14;
+  if(top<8) top=y+14;
+  tooltip.style.left=left+'px'; tooltip.style.top=top+'px';
+}
+function hideTip(){tooltip.style.display='none';}
+
+/* ---------- generic multi-series line chart (one axis) ---------- */
+function lineChart(parent, opt){
+  // opt: {series:[{name,color,t:[],v:[]}], unit, height, yMin, area, dayTicks, thresholds:[{y,label}]}
+  const H=opt.height||180, padL=34, padR=14, padT=12, padB=22;
+  const wrap=el('div','chart',parent);
+  const W=Math.max(320, wrap.clientWidth||parent.clientWidth||640);
+  const svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',height:H,role:'img'},wrap);
+  const plotW=W-padL-padR, plotH=H-padT-padB;
+  const t0=opt.series[0].t[0], t1=opt.series[0].t[opt.series[0].t.length-1];
+  const xOf=t=>padL+plotW*(t-t0)/(t1-t0);
+  let vAll=[]; opt.series.forEach(s=>vAll=vAll.concat(s.v.filter(v=>v!=null)));
+  let yMax=Math.max(...vAll)*1.15, yMin=opt.yMin!=null?opt.yMin:0;
+  yMax=Math.max(yMax,yMin+1);
+  // clean ticks
+  const span=yMax-yMin, step=span>20?10:span>10?5:span>5?2:1;
+  yMax=yMin+Math.ceil(span/step)*step;
+  const yOf=v=>padT+plotH*(1-(v-yMin)/(yMax-yMin));
+  // grid + y ticks
+  for(let v=yMin;v<=yMax+0.001;v+=step){
+    svgEl('line',{x1:padL,x2:W-padR,y1:yOf(v),y2:yOf(v),stroke:'var(--grid)','stroke-width':1},svg);
+    const tx=svgEl('text',{x:padL-6,y:yOf(v)+3.5,'text-anchor':'end','font-size':10,fill:'var(--ink-3)'},svg);
+    tx.textContent=String(Math.round(v)); tx.style.fontVariantNumeric='tabular-nums';
+  }
+  // x day ticks
+  const dayStart=new Date(t0); dayStart.setHours(0,0,0,0);
+  for(let d=new Date(dayStart);d<=t1;d.setDate(d.getDate()+1)){
+    if(d<t0) continue;
+    const x=xOf(d);
+    svgEl('line',{x1:x,x2:x,y1:padT,y2:H-padB,stroke:'var(--grid)','stroke-width':1},svg);
+    const tx=svgEl('text',{x:x+3,y:H-8,'font-size':10,fill:'var(--ink-3)'},svg);
+    tx.textContent=dayLabel(d);
+  }
+  svgEl('line',{x1:padL,x2:W-padR,y1:H-padB,y2:H-padB,stroke:'var(--axis)','stroke-width':1},svg);
+  // series
+  for(const s of opt.series){
+    const pts=s.t.map((t,i)=>s.v[i]==null?null:[xOf(t),yOf(s.v[i])]);
+    const dStr=pts.map((p,i)=>p==null?'':(i===0||pts[i-1]==null?'M':'L')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join('');
+    if(opt.area){
+      const first=pts.find(p=>p), last=[...pts].reverse().find(p=>p);
+      if(first&&last){
+        const a=svgEl('path',{d:dStr+'L'+last[0].toFixed(1)+' '+(H-padB)+'L'+first[0].toFixed(1)+' '+(H-padB)+'Z',fill:s.color,'fill-opacity':0.1,stroke:'none'},svg);
+      }
+    }
+    svgEl('path',{d:dStr,fill:'none',stroke:s.color,'stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round'},svg);
+  }
+  // direct end labels (selective; nudge apart if colliding)
+  const ends=opt.series.map(s=>{
+    const i=s.v.length-1; return {name:s.name,color:s.color,y:yOf(s.v[i]??yMin),v:s.v[i]};
+  }).filter(e=>e.v!=null).sort((a,b)=>a.y-b.y);
+  for(let i=1;i<ends.length;i++) if(ends[i].y-ends[i-1].y<12) ends[i].y=ends[i-1].y+12;
+  for(const e of ends){
+    svgEl('circle',{cx:W-padR,cy:e.y,r:4,fill:e.color,stroke:'var(--surface-1)','stroke-width':2},svg);
+    const tx=svgEl('text',{x:W-padR-8,y:e.y-6,'text-anchor':'end','font-size':10,'font-weight':600,fill:'var(--ink-2)'},svg);
+    tx.textContent=(Math.round(e.v*10)/10)+(opt.unit?' '+opt.unit:'');
+  }
+  // crosshair + tooltip
+  const cross=svgEl('line',{x1:0,x2:0,y1:padT,y2:H-padB,stroke:'var(--axis)','stroke-width':1,visibility:'hidden'},svg);
+  const dots=opt.series.map(s=>svgEl('circle',{r:4,fill:s.color,stroke:'var(--surface-1)','stroke-width':2,visibility:'hidden'},svg));
+  const onMove=(ev)=>{
+    const r=svg.getBoundingClientRect();
+    const px=(ev.clientX-r.left)*(W/r.width);
+    if(px<padL||px>W-padR){hideTip();cross.setAttribute('visibility','hidden');dots.forEach(d=>d.setAttribute('visibility','hidden'));return;}
+    const frac=(px-padL)/plotW; const tt=new Date(t0.getTime()+frac*(t1-t0));
+    const s0=opt.series[0];
+    const idx=clamp(Math.round((tt-s0.t[0])/(s0.t[1]-s0.t[0])),0,s0.t.length-1);
+    const snapX=xOf(s0.t[idx]);
+    cross.setAttribute('x1',snapX);cross.setAttribute('x2',snapX);cross.setAttribute('visibility','visible');
+    const rows=[];
+    opt.series.forEach((s,si)=>{
+      const v=s.v[idx];
+      if(v!=null){ dots[si].setAttribute('cx',snapX); dots[si].setAttribute('cy',yOf(v)); dots[si].setAttribute('visibility','visible');
+        rows.push({color:s.color,val:(Math.round(v*10)/10)+(opt.unit?' '+opt.unit:''),lbl:s.name}); }
+      else dots[si].setAttribute('visibility','hidden');
+    });
+    const d=s0.t[idx];
+    showTip(ev.clientX,ev.clientY,dayLabel(d)+' '+hourLabel(d),rows);
+  };
+  svg.addEventListener('pointermove',onMove);
+  svg.addEventListener('pointerleave',()=>{hideTip();cross.setAttribute('visibility','hidden');dots.forEach(d=>d.setAttribute('visibility','hidden'));});
+  return wrap;
+}
+
+/* ---------- status strip (runs of condition classes) ---------- */
+function statusStrip(parent, hours, opts){
+  const compact=opts&&opts.compact;
+  const H=compact?34:46, padB=compact?12:16, W=Math.max(300,parent.clientWidth||640);
+  const wrap=el('div','strip',parent);
+  const svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',height:H},wrap);
+  if(!hours.length) return wrap;
+  const t0=hours[0].t, t1=hours[hours.length-1].t;
+  const xOf=t=>W*((t-t0)/(t1-t0||1));
+  // runs
+  const runs=[]; let cur=null;
+  for(const h of hours){
+    if(cur&&cur.cls===h.cls){cur.to=h.t;cur.hrs.push(h);}
+    else {if(cur)runs.push(cur); cur={cls:h.cls,from:h.t,to:h.t,hrs:[h]};}
+  }
+  if(cur)runs.push(cur);
+  const barH=H-padB;
+  runs.forEach((r,i)=>{
+    const x=xOf(r.from), x2=(i===runs.length-1)?W:xOf(new Date(r.to.getTime()+36e5));
+    const w=Math.max(1,x2-x-2); // 2px surface gap between runs
+    const meta=CLS_META[r.cls];
+    const rect=svgEl('rect',{x:x+1,y:0,width:w,height:barH,rx:4,fill:meta.color},svg);
+    if(!compact&&w>58){
+      const tx=svgEl('text',{x:x+1+w/2,y:barH/2+3.5,'text-anchor':'middle','font-size':10,'font-weight':700,
+        fill:(r.cls==='warn'||r.cls==='serious')?'#3a2a00':'#fff'},svg);
+      tx.textContent=meta.ic+' '+meta.label;
+    }
+    rect.addEventListener('pointermove',ev=>{
+      const mid=r.hrs[Math.floor(r.hrs.length/2)];
+      showTip(ev.clientX,ev.clientY,timeRangeLabel(r.from,new Date(r.to.getTime()+36e5)),[
+        {color:meta.color,val:meta.ic+' '+meta.label,lbl:''},
+        {val:mid.hs+' ft @ '+mid.tp+' s',lbl:'seas'},
+        {val:mid.wind+' kn',lbl:'wind '+compass(mid.wdir??0)},
+        {val:mid.conf,lbl:'model agreement'},
+      ]);
+    });
+    rect.addEventListener('pointerleave',hideTip);
+  });
+  // day labels
+  const dayStart=new Date(t0); dayStart.setHours(0,0,0,0);
+  for(let d=new Date(dayStart);d<=t1;d.setDate(d.getDate()+1)){
+    if(d<t0)continue;
+    const tx=svgEl('text',{x:xOf(d)+2,y:H-2,'font-size':9.5,fill:'var(--ink-3)'},svg);
+    tx.textContent=dayLabel(d);
+    svgEl('line',{x1:xOf(d),x2:xOf(d),y1:0,y2:barH,stroke:'var(--surface-1)','stroke-width':2},svg);
+  }
+  return wrap;
+}
+function stripLegend(parent){
+  const lg=el('div','legend',parent);
+  for(const k of ['good','warn','serious','critical']){
+    const m=CLS_META[k]; const key=el('span','key',lg);
+    const sw=el('span','sw',key); sw.style.background=m.color;
+    el('span','',key,m.ic+' '+m.label);
+  }
+  return lg;
+}
+
+/* ---------- tide chart with ebb shading ---------- */
+function tideChart(parent, tides, nHours){
+  const start=state.scored.start;
+  const sub=tides.filter(p=>p.t>=start&&p.t<=new Date(start.getTime()+nHours*36e5));
+  const wrap=lineChart(parent,{series:[{name:'Predicted tide',color:'var(--seq-450)',t:sub.map(p=>p.t),v:sub.map(p=>p.v)}],unit:'ft',height:150,area:true,yMin:0});
+  return wrap;
+}
+
+/* ---------- map overlay layers (SST raster + wind particles) ----------
+   Raster interpolation + ramp approach ported from the freesurfforecast
+   surf_dash repo (buildFieldRasterURL / rampColor / leaflet-velocity u,v math). */
+const SST_RAMP=[
+  [0.00,[103,169,240]],   // cool shelf water — blue
+  [0.30,[157,206,178]],   // transitional green
+  [0.55,[247,201,110]],   // warming — sand
+  [0.78,[238,141,75]],    // warm — orange
+  [1.00,[211,59,59]],     // stream core — red
+];
+function rampColor(t){
+  if(!(t>=0))t=0; if(t>1)t=1;
+  for(let k=0;k<SST_RAMP.length-1;k++){
+    const a=SST_RAMP[k],b=SST_RAMP[k+1];
+    if(t<=b[0]){const f=(t-a[0])/(b[0]-a[0]);
+      return [Math.round(a[1][0]+(b[1][0]-a[1][0])*f),Math.round(a[1][1]+(b[1][1]-a[1][1])*f),Math.round(a[1][2]+(b[1][2]-a[1][2])*f)];}
+  }
+  return SST_RAMP[SST_RAMP.length-1][1];
+}
+function gridSample(g,field,lon,lat){
+  // NaN-aware bilinear sample of a 2D grid field at (lon,lat); null when unsupported
+  const fi=(lat-g.lats[0])/(g.lats[1]-g.lats[0]);
+  const fj=(lon-g.lons[0])/(g.lons[1]-g.lons[0]);
+  const i0=Math.floor(fi), j0=Math.floor(fj), fy=fi-i0, fx=fj-j0;
+  let sum=0,wsum=0;
+  for(let c=0;c<4;c++){
+    const ii=c<2?i0:i0+1, jj=(c%2===0)?j0:j0+1;
+    if(ii<0||jj<0||ii>=g.lats.length||jj>=g.lons.length) continue;
+    const w=(c<2?(1-fy):fy)*(c%2===0?(1-fx):fx);
+    if(w<=0) continue;
+    const v=field[ii]?field[ii][jj]:null;
+    if(v==null||v!==v) continue;
+    sum+=v*w; wsum+=w;
+  }
+  return wsum<0.15?null:sum/wsum;
+}
+function gridWindUV(g,lon,lat){
+  const spd=gridSample(g,g.wspd,lon,lat);
+  const dir=gridSample(g,g.wdir,lon,lat);
+  if(spd==null||dir==null) return null;
+  const r=dir*Math.PI/180;
+  return {u:-spd*Math.sin(r), v:-spd*Math.cos(r), spd};
+}
+function buildSSTRaster(g, vmin, vmax){
+  // equirectangular raster over the grid's cell-edge extent → data URL
+  const nx=g.lons.length, ny=g.lats.length, up=Math.max(4,Math.round(140/nx));
+  const W=nx*up, H=ny*up;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d');
+  const img=ctx.createImageData(W,H); const d=img.data;
+  const dLo=nx>1?g.lons[1]-g.lons[0]:0.2, dLa=ny>1?g.lats[1]-g.lats[0]:0.18;
+  const lonLo=g.lons[0]-dLo/2, lonHi=g.lons[nx-1]+dLo/2;
+  const latLo=g.lats[0]-dLa/2, latHi=g.lats[ny-1]+dLa/2;
+  const range=(vmax-vmin)||1, alpha=Math.round(0.55*255);
+  for(let py=0;py<H;py++){
+    const lat=latHi-(py+0.5)/H*(latHi-latLo);
+    for(let px=0;px<W;px++){
+      const lon=lonLo+(px+0.5)/W*(lonHi-lonLo);
+      const o=(py*W+px)*4;
+      if(pointInLand(lon,lat)){d[o+3]=0;continue;}
+      const v=gridSample(g,g.sst,lon,lat);
+      if(v==null){d[o+3]=0;continue;}
+      const rgb=rampColor((v-vmin)/range);
+      d[o]=rgb[0];d[o+1]=rgb[1];d[o+2]=rgb[2];d[o+3]=alpha;
+    }
+  }
+  ctx.putImageData(img,0,0);
+  return {url:cv.toDataURL('image/png'), lonLo, lonHi, latLo, latHi};
+}
+function startWindParticles(canvas, g, proj){
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height;
+  const ink=getComputedStyle(document.documentElement).getPropertyValue('--ink-2').trim()||'#52514e';
+  const N=280, parts=[];
+  const spawn=p=>{
+    for(let tries=0;tries<12;tries++){
+      const x=Math.random()*W, y=Math.random()*H;
+      const lon=proj.lonAt(x/W), lat=proj.latAt(y/H);
+      if(gridWindUV(g,lon,lat)){p.x=x;p.y=y;p.life=30+Math.random()*70;return;}
+    }
+    p.life=0;
+  };
+  for(let i=0;i<N;i++){const p={};spawn(p);p.life*=Math.random();parts.push(p);}
+  const step=()=>{
+    if(!canvas.isConnected||canvas.dataset.stop==='1') return;
+    ctx.globalCompositeOperation='destination-out';
+    ctx.fillStyle='rgba(0,0,0,0.07)';
+    ctx.fillRect(0,0,W,H);
+    ctx.globalCompositeOperation='source-over';
+    ctx.lineWidth=1.4; ctx.lineCap='round';
+    for(const p of parts){
+      if(--p.life<=0){spawn(p);continue;}
+      const lon=proj.lonAt(p.x/W), lat=proj.latAt(p.y/H);
+      const wv=gridWindUV(g,lon,lat);
+      if(!wv){spawn(p);continue;}
+      const k=0.09;
+      const nx2=p.x+wv.u*k, ny2=p.y-wv.v*k;
+      if(nx2<0||nx2>W||ny2<0||ny2>H){spawn(p);continue;}
+      const a=Math.min(0.75,0.25+wv.spd/28);
+      ctx.strokeStyle=ink; ctx.globalAlpha=a;
+      ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(nx2,ny2); ctx.stroke();
+      p.x=nx2; p.y=ny2;
+    }
+    ctx.globalAlpha=1;
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+/* ---------- schematic coast map ---------- */
+function coastMap(parent, opts){
+  // opts: {route:{inletId, zoneId}} — when set, draws departure→zone route and makes markers set the planner selects
+  const B=MAPDATA.bounds;
+  const W=640;
+  const aspect=((B.lonMax-B.lonMin)*Math.cos(34.2*Math.PI/180))/(B.latMax-B.latMin);
+  const H=Math.round(W/aspect);
+  const wrap=el('div','chart',parent);
+  const svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',role:'img','aria-label':'Map of Southeast North Carolina inlets'},wrap);
+  svg.style.overflow='hidden'; svg.style.borderRadius='10px';
+  const X=lon=>(lon-B.lonMin)/(B.lonMax-B.lonMin)*W;
+  const Y=lat=>(B.latMax-lat)/(B.latMax-B.latMin)*H;
+  const P=(lon,lat)=>X(lon).toFixed(1)+' '+Y(lat).toFixed(1);
+
+  // water wash
+  svgEl('rect',{x:0,y:0,width:W,height:H,rx:10,fill:'var(--seq-100)','fill-opacity':0.16},svg);
+  // gulf stream band
+  const gs=MAPDATA.gulfstream;
+  svgEl('path',{d:'M'+P(gs.a[0],gs.a[1])+' Q'+P(gs.c[0],gs.c[1])+' '+P(gs.b[0],gs.b[1]),
+    fill:'none',stroke:'var(--seq-100)','stroke-width':30,'stroke-opacity':0.55,'stroke-linecap':'round'},svg);
+  const gsMidX=X((gs.a[0]+2*gs.c[0]+gs.b[0])/4), gsMidY=Y((gs.a[1]+2*gs.c[1]+gs.b[1])/4);
+  const gsAng=-Math.atan2(Y(gs.b[1])-Y(gs.a[1]),X(gs.b[0])-X(gs.a[0]))*-180/Math.PI;
+  const gst=svgEl('text',{x:gsMidX,y:gsMidY+3,'text-anchor':'middle','font-size':10,fill:'var(--ink-3)',
+    transform:`rotate(${gsAng.toFixed(1)} ${gsMidX.toFixed(1)} ${gsMidY.toFixed(1)})`,'letter-spacing':'2'},svg);
+  gst.textContent='GULF STREAM →';
+
+  // SST raster layer (toggleable) — prefer MUR satellite analysis, then NWP grid
+  const grid=state.data.grid;
+  const sstGrid=state.data.murGrid||grid;
+  const sstSource=state.data.murGrid?'mur':(grid&&grid.live?'nwp':'demo');
+  let sstMin=null,sstMax=null;
+  if(sstGrid){
+    const vals=sstGrid.sst.flat().filter(v=>v!=null);
+    if(vals.length){ sstMin=Math.min(...vals)-0.2; sstMax=Math.max(...vals)+0.2; }
+  }
+  if(state.layers.sst&&sstGrid&&sstMin!=null){
+    const r=buildSSTRaster(sstGrid,sstMin,sstMax);
+    svgEl('image',{href:r.url,x:X(r.lonLo),y:Y(r.latHi),
+      width:X(r.lonHi)-X(r.lonLo),height:Y(r.latLo)-Y(r.latHi),
+      preserveAspectRatio:'none',opacity:1},svg);
+  }
+  // land
+  const coastPts=MAPDATA.coast.map(([lo,la])=>P(lo,la)).join(' L');
+  const first=MAPDATA.coast[0], last=MAPDATA.coast[MAPDATA.coast.length-1];
+  svgEl('path',{d:'M'+coastPts+' L'+P(last[0],B.latMax)+' L'+P(B.lonMin,B.latMax)+' Z',
+    fill:'var(--land)',stroke:'var(--axis)','stroke-width':1.2,'stroke-linejoin':'round'},svg);
+  // bay label
+  const bl=svgEl('text',{x:X(MAPDATA.bayLabel.lon),y:Y(MAPDATA.bayLabel.lat),'text-anchor':'middle','font-size':10,
+    fill:'var(--ink-3)','font-style':'italic','letter-spacing':'1'},svg);
+  bl.textContent=MAPDATA.bayLabel.text;
+
+  // route (under markers)
+  if(opts&&opts.route){
+    const inl=CONFIG.inlets.find(i=>i.id===opts.route.inletId);
+    const z=CONFIG.zones.find(z2=>z2.id===opts.route.zoneId);
+    if(inl&&z){
+      const x1=X(inl.lon),y1=Y(inl.lat),x2=X(z.lon),y2=Y(z.lat);
+      svgEl('line',{x1,y1,x2,y2,stroke:'var(--accent)','stroke-width':2,'stroke-linecap':'round'},svg);
+      const mx=(x1+x2)/2,my=(y1+y2)/2;
+      const rt=svgEl('text',{x:mx,y:my-7,'text-anchor':'middle','font-size':10,'font-weight':600,fill:'var(--ink-2)',
+        stroke:'var(--surface-1)','stroke-width':3,'paint-order':'stroke'},svg);
+      rt.textContent='≈ '+z.run_nm+' nm';
+    }
+  }
+
+  // Gulf Stream west wall — detected from the same SST field the map displays
+  let front=[];
+  if(sstGrid){
+    const field=transectPoints().map(p=>({...p, sst:gridSample(sstGrid,sstGrid.sst,p.lon,p.lat)}));
+    front=detectFront(field).filter(f=>f.g>=0.35); // drop noise-level gradients — no line beats a made-up line
+    if(front.length>=3){
+      const fp=front.map(f=>({x:X(f.lon),y:Y(f.lat)}));
+      let d='M'+fp[0].x.toFixed(1)+' '+fp[0].y.toFixed(1);
+      for(let i=1;i<fp.length;i++){
+        const mx=((fp[i-1].x+fp[i].x)/2).toFixed(1), my=((fp[i-1].y+fp[i].y)/2).toFixed(1);
+        d+=' Q'+fp[i-1].x.toFixed(1)+' '+fp[i-1].y.toFixed(1)+' '+mx+' '+my;
+      }
+      d+=' L'+fp[fp.length-1].x.toFixed(1)+' '+fp[fp.length-1].y.toFixed(1);
+      svgEl('path',{d,fill:'none',stroke:'var(--series-2)','stroke-width':2.5,'stroke-linecap':'round','stroke-linejoin':'round'},svg);
+      front.forEach(f=>{
+        const x=X(f.lon),y=Y(f.lat);
+        svgEl('circle',{cx:x,cy:y,r:4,fill:'var(--series-2)',stroke:'var(--surface-1)','stroke-width':2},svg);
+        const hit=svgEl('circle',{cx:x,cy:y,r:13,fill:'transparent',cursor:'default'},svg);
+        hit.addEventListener('pointermove',ev=>showTip(ev.clientX,ev.clientY,'West wall — off '+f.name,[
+          {color:'var(--series-2)',val:'Δ '+f.g.toFixed(1)+' °C',lbl:'SST front strength'+(f.weak?' (weak)':'')},
+          {val:(f.inshore*9/5+32).toFixed(0)+' °F',lbl:'inshore side'},
+          {val:(f.offshore*9/5+32).toFixed(0)+' °F',lbl:'stream side'},
+        ]));
+        hit.addEventListener('pointerleave',hideTip);
+      });
+      const lp=fp[Math.min(1,fp.length-1)];
+      const wl=svgEl('text',{x:lp.x+10,y:lp.y-8,'font-size':10,'font-weight':600,fill:'var(--ink-2)',
+        stroke:'var(--surface-1)','stroke-width':3,'paint-order':'stroke'},svg);
+      wl.textContent='West wall · '+(sstSource==='mur'?'satellite SST':sstSource==='nwp'?'NWP SST':'demo SST');
+    }
+  }
+
+  // offshore zone markers (diamonds)
+  for(const z of CONFIG.zones){
+    const x=X(z.lon),y=Y(z.lat);
+    const sel=opts&&opts.route&&opts.route.zoneId===z.id;
+    const g=svgEl('g',{transform:`rotate(45 ${x} ${y})`},svg);
+    svgEl('rect',{x:x-5,y:y-5,width:10,height:10,rx:2,fill:sel?'var(--accent)':'var(--ink-3)',
+      stroke:'var(--surface-1)','stroke-width':2},g);
+    const zl=MAPDATA.zoneLabels[z.id];
+    const zt=svgEl('text',{x:x+zl.dx,y:y+zl.dy,'text-anchor':zl.anchor,'font-size':10,'font-weight':600,fill:'var(--ink-2)',
+      stroke:'var(--surface-1)','stroke-width':3,'paint-order':'stroke'},svg);
+    zt.textContent=zl.text;
+    const hit=svgEl('circle',{cx:x,cy:y,r:16,fill:'transparent',cursor:'pointer'},svg);
+    hit.addEventListener('pointermove',ev=>{
+      const rows=[{val:'≈ '+z.run_nm+' nm run',lbl:''}];
+      if(sstGrid){
+        const s=gridSample(sstGrid,sstGrid.sst,z.lon,z.lat);
+        if(s!=null) rows.push({val:(s*9/5+32).toFixed(0)+' °F',lbl:'SST ('+(sstSource==='mur'?'satellite':sstSource.toUpperCase())+')'});
+      }
+      showTip(ev.clientX,ev.clientY,z.name,rows);
+    });
+    hit.addEventListener('pointerleave',hideTip);
+    hit.addEventListener('click',()=>{
+      if(opts&&opts.route){ $('#zoneSel').value=z.id; renderOffshore(); }
+      else setView('offshore');
+    });
+  }
+
+  // inlet markers, colored by current condition class
+  for(const inl of CONFIG.inlets){
+    const hours=state.scored.inlets[inl.id];
+    const cls=hours&&hours.length?hours[0].cls:'warn';
+    const meta=CLS_META[cls];
+    const x=X(inl.lon),y=Y(inl.lat);
+    const sel=opts&&opts.route&&opts.route.inletId===inl.id;
+    if(sel) svgEl('circle',{cx:x,cy:y,r:11,fill:'none',stroke:'var(--accent)','stroke-width':2},svg);
+    svgEl('circle',{cx:x,cy:y,r:6,fill:meta.color,stroke:'var(--surface-1)','stroke-width':2},svg);
+    const lb=MAPDATA.labels[inl.id];
+    const ldx=lb.dx+(sel&&lb.anchor==='start'?7:0);
+    const tx=svgEl('text',{x:x+ldx,y:y+lb.dy+3,'text-anchor':lb.anchor,'font-size':10,'font-weight':600,fill:'var(--ink-2)',
+      stroke:'var(--surface-1)','stroke-width':3,'paint-order':'stroke'},svg);
+    tx.textContent=inl.short;
+    const hit=svgEl('circle',{cx:x,cy:y,r:15,fill:'transparent',cursor:'pointer'},svg);
+    hit.addEventListener('pointermove',ev=>{
+      const now=hours&&hours[0];
+      showTip(ev.clientX,ev.clientY,inl.name, now?[
+        {color:meta.color,val:meta.ic+' '+meta.label,lbl:''},
+        {val:now.hs+' ft @ '+now.tp+' s',lbl:'seas'},
+        {val:now.wind+' kn '+compass(now.wdir??0),lbl:'wind'},
+      ]:[]);
+    });
+    hit.addEventListener('pointerleave',hideTip);
+    hit.addEventListener('click',()=>{
+      hideTip();
+      if(opts&&opts.route){ $('#depSel').value=inl.id; renderOffshore(); }
+      else { state.detailInlet=inl.id; renderDetail(); setView('detail'); }
+    });
+  }
+
+  // wind particle layer (toggleable) — canvas overlay, pointer-events none
+  if(state.layers.wind&&grid){
+    const cv=document.createElement('canvas');
+    cv.width=W*2; cv.height=H*2;
+    cv.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none;border-radius:10px;';
+    wrap.appendChild(cv);
+    startWindParticles(cv,grid,{
+      lonAt:f=>B.lonMin+f*(B.lonMax-B.lonMin),
+      latAt:f=>B.latMax-f*(B.latMax-B.latMin),
+    });
+  }
+
+  // cursor readout — every overlay value reachable without tooltips
+  if(grid&&(state.layers.sst||state.layers.wind)){
+    const ro=el('div','mapreadout',wrap);
+    svg.addEventListener('pointermove',ev=>{
+      const r=svg.getBoundingClientRect();
+      const lon=B.lonMin+(ev.clientX-r.left)/r.width*(B.lonMax-B.lonMin);
+      const lat=B.latMax-(ev.clientY-r.top)/r.height*(B.latMax-B.latMin);
+      const s=(state.layers.sst&&sstGrid)?gridSample(sstGrid,sstGrid.sst,lon,lat):null;
+      const wv=state.layers.wind?gridWindUV(grid,lon,lat):null;
+      const bits=[];
+      if(s!=null) bits.push((s*9/5+32).toFixed(0)+' °F');
+      if(wv) bits.push(wv.spd.toFixed(0)+' kn '+compass((Math.atan2(-wv.u,-wv.v)*180/Math.PI+360)%360));
+      if(bits.length){ ro.textContent=bits.join(' · ')+(sstSource==='demo'&&!(grid&&grid.live)?' · demo':''); ro.style.display='block'; }
+      else ro.style.display='none';
+    });
+    svg.addEventListener('pointerleave',()=>{ro.style.display='none';});
+  }
+
+  // SST scale legend (required for the semantic-heat ramp)
+  if(state.layers.sst&&sstMin!=null){
+    const lg=el('div','sstlegend',parent);
+    const stops=SST_RAMP.map(s=>`rgb(${s[1][0]},${s[1][1]},${s[1][2]}) ${Math.round(s[0]*100)}%`).join(',');
+    const bar=el('span','sstbar',lg); bar.style.background='linear-gradient(90deg,'+stops+')';
+    const lo=el('span','',lg,(sstMin*9/5+32).toFixed(0)+' °F');
+    lg.insertBefore(lo,bar);
+    el('span','',lg,(sstMax*9/5+32).toFixed(0)+' °F');
+    const srcTxt = sstSource==='mur'
+      ? 'SST · MUR satellite analysis'+(sstGrid.time?' · '+String(sstGrid.time).slice(0,10):'')
+      : sstSource==='nwp' ? 'SST · NWP model analysis' : 'SST · demo';
+    el('span','sstnote',lg,srcTxt);
+  }
+
+  // unmissable watermark when everything on this map is synthetic
+  if(sstSource==='demo'&&!(grid&&grid.live)){
+    const wm=svgEl('text',{x:W/2,y:H/2,'text-anchor':'middle','font-size':30,'font-weight':800,
+      fill:'var(--ink-3)',opacity:0.32,'letter-spacing':'6',
+      transform:`rotate(-16 ${W/2} ${H/2})`},svg);
+    wm.textContent='DEMO DATA';
+  }
+  return wrap;
+}
+
+function layerToggles(head){
+  const mk=(key,label)=>{
+    const b=el('button','laybtn'+(state.layers[key]?' on':''),head,label);
+    b.setAttribute('aria-pressed',String(state.layers[key]));
+    b.addEventListener('click',()=>{
+      state.layers[key]=!state.layers[key];
+      renderInletCards(); renderOffshore();
+    });
+  };
+  mk('sst','SST'); mk('wind','Wind');
+}
+
+/* ---------- views ---------- */
+function setView(v){
+  state.view=v;
+  $$('.view').forEach(x=>x.classList.remove('active'));
+  $('#view-'+(v==='detail'?'detail':v)).classList.add('active');
+  $$('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.view===v||(v==='detail'&&b.dataset.view==='inlets')));
+  window.scrollTo({top:0});
+}
+
+function chipFor(cls, extra){
+  const m=CLS_META[cls];
+  const c=document.createElement('span');
+  c.className='chip '+cls;
+  c.textContent=m.ic+' '+m.label+(extra?(' '+extra):'');
+  return c;
+}
+
+function renderInletCards(){
+  const mp=$('#coastPanel');
+  if(mp){
+    mp.textContent='';
+    const mh=el('div','maphead',mp); el('h4','',mh,'The coast at a glance');
+    el('span','',mh,'markers show current conditions — tap one to open the inlet');
+    const sp=el('span','spacer',mh); layerToggles(mh);
+    coastMap(mp);
+    stripLegend(mp).style.padding='6px 4px 4px';
+  }
+  const grid=$('#inletCards'); grid.textContent='';
+  const inlets=CONFIG.inlets.filter(i=>state.area==='all'||i.area===state.area);
+  for(const inl of inlets){
+    const hours=state.scored.inlets[inl.id]; if(!hours||!hours.length) continue;
+    const now=hours[0];
+    const card=el('div','card',grid);
+    card.setAttribute('role','button'); card.tabIndex=0;
+    const h3=el('h3','',card); h3.textContent=inl.name; el('span','area',h3,inl.area);
+    const chiprow=el('div','',card); chiprow.style.margin='6px 0 2px';
+    chiprow.appendChild(chipFor(now.cls));
+    if(now.conf==='low'){const g=el('span','chip ghost',chiprow,'models disagree');g.style.marginLeft='6px';}
+    const stats=el('div','statrow',card);
+    const s1=el('div','stat',stats); el('div','lbl',s1,'Seas'); el('div','val',s1,now.hs+' ft'); el('div','sub',s1,'@ '+now.tp+' s '+compass(now.dir));
+    const s2=el('div','stat',stats); el('div','lbl',s2,'Wind'); el('div','val',s2,now.wind+' kn'); el('div','sub',s2,compass(now.wdir??0)+(now.gst?' G'+now.gst:''));
+    const s3=el('div','stat',stats); el('div','lbl',s3,'Tide');
+    el('div','val',s3, now.ebb>0.45?'Ebb':now.ebb>0.05?'Falling':'Flood/slack');
+    el('div','sub',s3, now.tideH!=null?now.tideH.toFixed(1)+' ft MLLW':'');
+    statusStrip(card,hours.slice(0,CONFIG.hoursDetail),{compact:true});
+    const wins=findWindows(hours,CONFIG.hoursDetail);
+    const nw=el('div','nextwin',card);
+    if(now.cls==='good'&&wins.length){ nw.textContent='In a window now — holds until '; const b=el('strong','',nw,timeRangeLabel(wins[0].from,new Date(wins[0].to.getTime()+36e5)).split('–').pop()); }
+    else if(wins.length){ nw.textContent='Next window: '; el('strong','',nw,timeRangeLabel(wins[0].from,new Date(wins[0].to.getTime()+36e5))); }
+    else nw.textContent='No favorable window in the next 72 h for this boat size.';
+    const open=()=>{state.detailInlet=inl.id; renderDetail(); setView('detail');};
+    card.addEventListener('click',open);
+    card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});
+  }
+}
+
+function renderDetail(){
+  const view=$('#view-detail'); view.textContent='';
+  const inl=CONFIG.inlets.find(i=>i.id===state.detailInlet); if(!inl) return;
+  const hours=state.scored.inlets[inl.id];
+  const back=el('button','backbtn',view,'← All inlets');
+  back.addEventListener('click',()=>setView('inlets'));
+  const head=el('div','detailhead',view);
+  const h2=el('h2','',head,inl.name);
+  head.appendChild(chipFor(hours[0].cls));
+  if(hours[0].conf==='low') el('span','chip ghost',head,'models disagree');
+  el('p','inletnote',view,inl.note);
+
+  // windows
+  const p0=el('div','panel',view);
+  el('h4','',p0,'Condition windows — next 72 h');
+  el('p','psub',p0,'Boat class: '+(CONFIG.boats[state.boatKey]||'')+' · tide station: '+inl.tideName);
+  statusStrip(p0,hours.slice(0,CONFIG.hoursDetail),{});
+  stripLegend(p0);
+  const wins=findWindows(hours,CONFIG.hoursDetail);
+  const wl=el('div','windowlist',p0);
+  if(!wins.length) el('div','windowrow',wl,'No favorable windows in the next 72 h at this boat size — check the Marginal periods in the strip above and the hourly table.');
+  wins.slice(0,5).forEach(w=>{
+    const row=el('div','windowrow',wl);
+    el('span','when',row,timeRangeLabel(w.from,new Date(w.to.getTime()+36e5)));
+    const mid=hours.find(h=>h.t>=w.from);
+    el('span','why',row,mid?whyText(mid):'');
+    if(w.conf==='low') row.appendChild(chipFor('warn')); // shouldn't happen for good runs; guard
+  });
+
+  // why now
+  const now=hours[0];
+  const p1=el('div','panel',view);
+  el('h4','',p1,'Why it’s scored this way right now');
+  const fc=el('div','factorchips',p1);
+  const f1=el('span','fchip',fc); f1.append('Sea state '); el('b','',f1,'−'+now.pSea); f1.append(' · '+now.hs+' ft @ '+now.tp+' s '+compass(now.dir));
+  const f2=el('span','fchip',fc); f2.append('Wind '); el('b','',f2,'−'+now.pWind); f2.append(' · '+now.wind+' kn '+compass(now.wdir??0));
+  const f3=el('span','fchip',fc); f3.append('Tide × bar '); el('b','',f3,'−'+now.pTide); f3.append(' · '+(now.ebb>0.45?'ebb':now.ebb>0.05?'falling':'flood/slack')+(now.opp>0.5?' against the swell':''));
+  const f4=el('span','fchip',fc); f4.append('Score '); el('b','',f4,String(now.score)+' / 100');
+
+  // wave chart
+  const p2=el('div','panel',view);
+  const ph2=el('div','panelhead',p2); el('h4','',ph2,'Significant wave height — model comparison'); el('span','spacer',ph2);
+  el('p','psub',p2,'Nearshore point off the inlet. Two independent wave models; divergence = lower confidence.');
+  const d=state.data.inlets[inl.id];
+  const n=CONFIG.hoursDetail;
+  const mt=d.marine.t.filter(t=>t>=state.scored.start).slice(0,n);
+  const i0=d.marine.t.findIndex(t=>t>=state.scored.start);
+  lineChart(p2,{series:[
+    {name:'GFS-Wave',color:'var(--series-1)',t:mt,v:d.marine.gfs.hs.slice(i0,i0+n)},
+    {name:'ECMWF-WAM',color:'var(--series-2)',t:mt,v:d.marine.ecmwf.hs.slice(i0,i0+n)},
+  ],unit:'ft',height:190});
+  const lg=el('div','legend',p2);
+  [['GFS-Wave','var(--series-1)'],['ECMWF-WAM','var(--series-2)']].forEach(([nm,c])=>{
+    const k=el('span','key',lg); const lk=el('span','lk',k); lk.style.background=c; el('span','',k,nm);
+  });
+
+  // wind chart
+  const p3=el('div','panel',view);
+  el('h4','',p3,'Wind — model comparison');
+  el('p','psub',p3,'10 m wind at the nearshore point, knots.');
+  const wt=d.wind.t.filter(t=>t>=state.scored.start).slice(0,n);
+  const wi0=d.wind.t.findIndex(t=>t>=state.scored.start);
+  lineChart(p3,{series:[
+    {name:'GFS',color:'var(--series-1)',t:wt,v:d.wind.gfs.spd.slice(wi0,wi0+n)},
+    {name:'ECMWF',color:'var(--series-2)',t:wt,v:d.wind.ecmwf.spd.slice(wi0,wi0+n)},
+  ],unit:'kn',height:170});
+  const lg3=el('div','legend',p3);
+  [['GFS','var(--series-1)'],['ECMWF','var(--series-2)']].forEach(([nm,c])=>{
+    const k=el('span','key',lg3); const lk=el('span','lk',k); lk.style.background=c; el('span','',k,nm);
+  });
+
+  // tide chart
+  const p4=el('div','panel',view);
+  el('h4','',p4,'Predicted tide — '+inl.tideName);
+  el('p','psub',p4,'NOAA CO-OPS predictions, ft MLLW. Falling limb = ebb over the bar.');
+  tideChart(p4,state.data.tides[inl.tideSta],CONFIG.hoursDetail);
+
+  // hourly table (a11y twin)
+  const p5=el('div','panel',view);
+  const ph5=el('div','panelhead',p5); el('h4','',ph5,'Hourly detail');
+  el('span','spacer',ph5);
+  const tbtn=el('button','iconbtn',ph5, state.showTable[inl.id]?'Hide table':'Show table');
+  tbtn.addEventListener('click',()=>{state.showTable[inl.id]=!state.showTable[inl.id];renderDetail();});
+  if(state.showTable[inl.id]){
+    const wrapT=el('div','tablewrap',p5);
+    const tb=el('table','data',wrapT);
+    const thr=el('tr','',el('thead','',tb));
+    ['Time','Seas ft','Period s','Swell dir','Wind kn','Tide','Score','Class','Agreement'].forEach(h=>el('th','',thr,h));
+    const tbody=el('tbody','',tb);
+    hours.slice(0,CONFIG.hoursDetail).forEach(h=>{
+      const tr=el('tr','',tbody);
+      el('td','',tr,dayLabel(h.t)+' '+hourLabel(h.t));
+      el('td','',tr,String(h.hs)); el('td','',tr,String(h.tp)); el('td','',tr,compass(h.dir));
+      el('td','',tr,h.wind+' '+compass(h.wdir??0));
+      el('td','',tr,h.ebb>0.45?'ebb':h.ebb>0.05?'falling':'flood/slack');
+      el('td','',tr,String(h.score));
+      el('td','',tr,CLS_META[h.cls].ic+' '+CLS_META[h.cls].label);
+      el('td','',tr,h.conf);
+    });
+  } else el('p','psub',p5,'Every value in the charts above, hour by hour, without hovering.');
+
+  // sample outlook
+  const p6=el('div','panel',view);
+  el('h4','',p6,'This week on the NC coast');
+  const ol=el('div','outlook',p6);
+  el('div','byline',ol,'Written outlook · AJ Kammerer · sample of the weekly forecaster note that ships with the paid tier');
+  el('p','',ol,'Long-period SE energy hangs around through midweek while the pressure gradient stays slack — mornings look like the play, with light land breezes early and a building seabreeze chop after lunch. The inlets that care about period (Carolina Beach, New River) will be sportier than the raw heights suggest on the afternoon ebbs.');
+  el('p','',ol,'Watch the back half of the week: the models split on how fast the next trough digs in. GFS is faster and windier; the ECMWF holds the ridge another 24 hours. If the ECMWF wins, Thursday is a legitimate Gulf Stream day. We’ll know more when the Wednesday 12Z runs land — this note updates every Monday and Thursday.');
+}
+
+/* ---------- offshore planner ---------- */
+function segScore(zoneHours, inletHours, dayStart, fromH, toH, useInlet){
+  // average over local hours [fromH,toH) on that day
+  let worst=null, arr=[];
+  const src=useInlet?inletHours:zoneHours;
+  for(const h of src){
+    const local=h.t;
+    if(local>=dayStart&&local<new Date(dayStart.getTime()+864e5)){
+      const hr=local.getHours();
+      if(hr>=fromH&&hr<toH){ arr.push(h); if(!worst||clsRank(h.cls)>clsRank(worst.cls)) worst=h; }
+    }
+  }
+  if(!arr.length) return null;
+  const avg=Math.round(arr.reduce((s,h)=>s+h.score,0)/arr.length);
+  return {avg, cls:worst.cls, sample:arr[Math.floor(arr.length/2)]};
+}
+
+function renderOffshore(){
+  const body=$('#offshoreBody'); body.textContent='';
+  const depSel=$('#depSel'), zoneSel=$('#zoneSel');
+  if(!depSel.options.length){
+    CONFIG.inlets.forEach(i=>{const o=document.createElement('option');o.value=i.id;o.textContent=i.name;depSel.appendChild(o);});
+    depSel.value='newtopsail';
+    CONFIG.zones.forEach(z=>{const o=document.createElement('option');o.value=z.id;o.textContent=z.name;zoneSel.appendChild(o);});
+    depSel.addEventListener('change',renderOffshore);
+    zoneSel.addEventListener('change',renderOffshore);
+  }
+  const inl=CONFIG.inlets.find(i=>i.id===depSel.value);
+  const zone=CONFIG.zones.find(z=>z.id===zoneSel.value);
+  const zd=state.data.zones[zone.id];
+  // score the zone point hours with a simplified open-water rule (no tide/bar term)
+  const zoneHours=[];
+  for(let i=0;i<CONFIG.hoursPlanner;i++){
+    const when=new Date(state.scored.start.getTime()+i*36e5);
+    const hsG=seriesAt(zd.marine.t,zd.marine.gfs.hs,when), hsE=seriesAt(zd.marine.t,zd.marine.ecmwf.hs,when);
+    const spdG=seriesAt(zd.wind.t,zd.wind.gfs.spd,when), spdE=seriesAt(zd.wind.t,zd.wind.ecmwf.spd,when);
+    const tp=seriesAt(zd.marine.t,zd.marine.gfs.tp,when)??9;
+    if(hsG==null||spdG==null) continue;
+    const hs=hsE!=null?(hsG+hsE)/2:hsG, wind=spdE!=null?(spdG+spdE)/2:spdG;
+    const hsEff=hs*state.boatFactor;
+    let p=clamp((hsEff-3)*8,0,50)+clamp((wind-12)*2.2,0,32);
+    if(tp<7) p+=clamp((7-tp)*3,0,12);
+    const score=Math.round(clamp(100-p,0,100));
+    let cls; if(hsEff>=9||wind>=25||score<25)cls='critical';else if(score>=70)cls='good';else if(score>=45)cls='warn';else cls='serious';
+    const spread=(hsG!=null&&hsE!=null)?Math.abs(hsG-hsE):0;
+    zoneHours.push({t:when,score,cls,hs:+hs.toFixed(1),tp:+tp.toFixed(1),wind:Math.round(wind),wdir:seriesAt(zd.wind.t,zd.wind.gfs.dir,when),dir:seriesAt(zd.marine.t,zd.marine.gfs.dir,when)??120,conf:spread>1.8?'low':spread>1?'med':'high',ebb:0,opp:0});
+  }
+  const inletHours=state.scored.inlets[inl.id];
+
+  el('p','viewsub',body,zone.note+' Run ≈ '+zone.run_nm+' nm each way from '+inl.name+'. Segments: run out 4–8 am (inlet + open water), on the grounds 8 am–2 pm, run home 2–6 pm.');
+
+  const mapP=el('div','panel mappanel',body);
+  const mh=el('div','maphead',mapP); el('h4','',mh,'The run');
+  el('span','',mh,'tap an inlet or a zone to change the plan');
+  const sp2=el('span','spacer',mh); layerToggles(mh);
+  coastMap(mapP,{route:{inletId:inl.id, zoneId:zone.id}});
+
+  const cards=el('div','daycards',body);
+  for(let dIdx=0;dIdx<7;dIdx++){
+    const dayStart=new Date(state.scored.start); dayStart.setHours(0,0,0,0); dayStart.setDate(dayStart.getDate()+dIdx);
+    if(dIdx===0&&state.scored.start.getHours()>=14) continue;
+    const segOutInlet=segScore(zoneHours,inletHours,dayStart,4,8,true);
+    const segOutSea=segScore(zoneHours,inletHours,dayStart,5,9,false);
+    const segFish=segScore(zoneHours,inletHours,dayStart,8,14,false);
+    const segHomeSea=segScore(zoneHours,inletHours,dayStart,13,18,false);
+    const segHomeInlet=segScore(zoneHours,inletHours,dayStart,14,19,true);
+    const segs=[
+      ['Inlet at first light',segOutInlet],['Run out',segOutSea],['On the grounds',segFish],['Run home',segHomeSea],['Inlet on return',segHomeInlet],
+    ].filter(s=>s[1]);
+    if(!segs.length) continue;
+    let worst='good', avg=0;
+    segs.forEach(([,s])=>{if(clsRank(s.cls)>clsRank(worst))worst=s.cls;avg+=s.avg;});
+    avg=Math.round(avg/segs.length);
+    const card=el('div','daycard',cards);
+    const h5=el('h5','',card);
+    el('span','',h5,dayLabel(dayStart)+' '+(dayStart.getMonth()+1)+'/'+dayStart.getDate());
+    h5.appendChild(chipFor(worst));
+    const lowConf=segs.some(([,s])=>s.sample.conf==='low');
+    if(lowConf){const g=el('div','',card);g.style.margin='4px 0';el('span','chip ghost',g,'models disagree');}
+    for(const [name,s] of segs){
+      const row=el('div','segrow',card);
+      el('span','segname',row,name);
+      const val=el('span','segval',row);
+      const dot=el('span','segdot',val); dot.style.background=CLS_META[s.cls].color;
+      val.append(CLS_META[s.cls].ic+' '+s.sample.hs+' ft · '+s.sample.wind+' kn');
+    }
+  }
+
+  // 7-day offshore wave chart
+  const p=el('div','panel',body);
+  el('h4','',p,'Offshore seas at the grounds — 7 days, model comparison');
+  el('p','psub',p,'Significant wave height at '+zone.name+'.');
+  const mt=zd.marine.t.filter(t=>t>=state.scored.start).slice(0,CONFIG.hoursPlanner);
+  const i0=zd.marine.t.findIndex(t=>t>=state.scored.start);
+  lineChart(p,{series:[
+    {name:'GFS-Wave',color:'var(--series-1)',t:mt,v:zd.marine.gfs.hs.slice(i0,i0+CONFIG.hoursPlanner)},
+    {name:'ECMWF-WAM',color:'var(--series-2)',t:mt,v:zd.marine.ecmwf.hs.slice(i0,i0+CONFIG.hoursPlanner)},
+  ],unit:'ft',height:190});
+  const lg=el('div','legend',p);
+  [['GFS-Wave','var(--series-1)'],['ECMWF-WAM','var(--series-2)']].forEach(([nm,c])=>{
+    const k=el('span','key',lg); const lk=el('span','lk',k); lk.style.background=c; el('span','',k,nm);
+  });
+}
+
+/* ---------- model agreement view ---------- */
+function renderModels(){
+  const body=$('#modelsBody'); body.textContent='';
+  const sel=$('#modelInletSel');
+  if(!sel.options.length){
+    CONFIG.inlets.forEach(i=>{const o=document.createElement('option');o.value=i.id;o.textContent=i.name;sel.appendChild(o);});
+    sel.addEventListener('change',renderModels);
+  }
+  const inl=CONFIG.inlets.find(i=>i.id===sel.value)||CONFIG.inlets[0];
+  const d=state.data.inlets[inl.id];
+  const n=CONFIG.hoursPlanner;
+  const i0=d.marine.t.findIndex(t=>t>=state.scored.start);
+  const mt=d.marine.t.slice(i0,i0+n);
+  // agreement stat
+  const hsG=d.marine.gfs.hs.slice(i0,i0+n), hsE=d.marine.ecmwf.hs.slice(i0,i0+n);
+  let diffs=[]; for(let i=0;i<Math.min(hsG.length,hsE.length);i++){if(hsG[i]!=null&&hsE[i]!=null)diffs.push(Math.abs(hsG[i]-hsE[i]));}
+  const mad=diffs.length?(diffs.reduce((a,b)=>a+b,0)/diffs.length):0;
+  const agree= mad<0.6?'High':mad<1.2?'Moderate':'Low';
+
+  const p0=el('div','panel',body);
+  el('h4','',p0,'Agreement over the next 7 days — '+inl.name);
+  const fc=el('div','factorchips',p0);
+  const c1=el('span','fchip',fc); c1.append('Mean model spread '); el('b','',c1,mad.toFixed(1)+' ft');
+  const c2=el('span','fchip',fc); c2.append('Agreement '); el('b','',c2,agree);
+  el('p','psub',p0,'Spread is the average absolute difference in significant wave height between GFS-Wave and ECMWF-WAM. Rule of thumb: under 0.6 ft, plan on the consensus; over 1.2 ft, wait for the next model cycle before committing to a long run.');
+
+  const p1=el('div','panel',body);
+  el('h4','',p1,'Wave height — 7 days');
+  lineChart(p1,{series:[
+    {name:'GFS-Wave',color:'var(--series-1)',t:mt,v:hsG},
+    {name:'ECMWF-WAM',color:'var(--series-2)',t:mt,v:hsE},
+  ],unit:'ft',height:200});
+  const lg=el('div','legend',p1);
+  [['GFS-Wave','var(--series-1)'],['ECMWF-WAM','var(--series-2)']].forEach(([nm,c])=>{
+    const k=el('span','key',lg); const lk=el('span','lk',k); lk.style.background=c; el('span','',k,nm);
+  });
+
+  const wi0=d.wind.t.findIndex(t=>t>=state.scored.start);
+  const wt=d.wind.t.slice(wi0,wi0+n);
+  const p2=el('div','panel',body);
+  el('h4','',p2,'Wind — 7 days');
+  lineChart(p2,{series:[
+    {name:'GFS',color:'var(--series-1)',t:wt,v:d.wind.gfs.spd.slice(wi0,wi0+n)},
+    {name:'ECMWF',color:'var(--series-2)',t:wt,v:d.wind.ecmwf.spd.slice(wi0,wi0+n)},
+  ],unit:'kn',height:180});
+  const lg2=el('div','legend',p2);
+  [['GFS','var(--series-1)'],['ECMWF','var(--series-2)']].forEach(([nm,c])=>{
+    const k=el('span','key',lg2); const lk=el('span','lk',k); lk.style.background=c; el('span','',k,nm);
+  });
+}
+
+/* ---------- method ---------- */
+function renderMethod(){
+  const b=$('#methodBody'); if(b.childNodes.length) return;
+  const add=(h,t)=>{if(h)el('h4','',b,h);el('p','',b,t);};
+  add(null,'InletCast is a prototype by Ghosttree Technical Solutions — a working demonstration of inlet-scale condition guidance for the Southeast NC coast, built by a forecaster who runs these inlets.');
+  add('Data','Wave guidance comes from two independent operational wave models (NOAA GFS-Wave and ECMWF WAM) at a nearshore point off each inlet, via the Open-Meteo API. Winds are GFS and ECMWF 10 m fields. Tides are NOAA CO-OPS harmonic predictions from the nearest reference station. When live sources are unreachable, the app runs on clearly-labeled synthetic demo data so you can still explore the interface.');
+  add('The score','Each hour gets a 0–100 score built from three transparent penalties: sea state (height and short-period steepness), wind (speed, gusts, onshore component), and the tide term — ebb strength multiplied by how directly the swell opposes the channel, weighted by each inlet’s shoaling behavior. The score is scaled by your boat class. Nothing is a black box: the "why" panel shows every penalty.');
+  add('What the classes mean','Favorable (✓): conditions models suggest a well-found boat of your class handles comfortably. Marginal (!): doable for experienced operators, uncomfortable, timing matters. Rough (✕): most operators should wait for the next window. Hazardous (⚠): conditions at or beyond small-craft-advisory character at the inlet.');
+  add('What this prototype does not yet do','No inlet-specific bathymetry or surf-zone wave transformation (the production version applies a per-inlet shoaling model tuned against buoy and camera verification); no real-time buoy assimilation; no USACE survey ingestion; tide stations are nearest-reference proxies for some inlets; no current predictions at the inlet mouth. Every one of these is on the roadmap — and the scoring will be verified publicly against observations, the same way we verify NOAA operational models.');
+  add('Map layers','The SST fill prefers the MUR 1-km satellite-blended SST analysis (NASA/JPL, served by NOAA CoastWatch) — the same class of data the paid SST chart services sell — and falls back to smoothed NWP-model SST, then labeled demo data, if unreachable. Wind streamlines are sampled from NWP 10 m winds on a grid across Onslow Bay, bilinearly interpolated; the particle animation follows the interpolated wind exactly, in the style of the freesurfforecast swell map. Toggle layers with the SST / Wind buttons; the cursor readout at the bottom-left gives exact interpolated values. Note that in mid-summer the true SST contrast across the west wall is at its annual minimum — a faint August wall is the ocean, not a bug — which is why chlorophyll and altimetry are the planned complements.');
+  add('The Gulf Stream line','The orange "west wall" line on the map is detected live: we sample NWP sea-surface temperature along five cross-shelf transects and place the wall at the strongest temperature step on each line, then connect them. Model SST is an analysis product at ~25 km resolution — good enough to see whether the stream is riding in or pushed offshore, not good enough to find a finger or an eddy edge. Production versions would blend satellite SST (GOES, VIIRS) and ocean model output (RTOFS) for chart-service-grade edges. Treat it as orientation, not navigation.');
+  add('The honest caveat','A forecast cannot see today’s bar. Inlets shoal, channels move, and a model point a few miles offshore is not the standing wave on the ebb delta. Treat every window as a hypothesis to verify with your eyes, official NWS forecasts, and local knowledge.');
+  el('p','sig',b,'Built by AJ Kammerer · Ghosttree Technical Solutions, LLC · Hampstead, NC — prototype v0.1, August 2026.');
+}
+
+/* ---------- boot ---------- */
+function renderAll(){
+  scoreAll();
+  renderInletCards();
+  if(state.view==='detail') renderDetail();
+  renderOffshore();
+  renderModels();
+  renderMethod();
+}
+function updateModeBadge(){
+  const b=$('#modeBadge'), t=$('#modeText');
+  b.classList.toggle('live',state.mode==='live');
+  const time=state.fetchedAt?state.fetchedAt.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):'';
+  t.textContent = state.mode==='live' ? 'Live data · '+time
+    : state.mode==='mixed' ? 'Partial live · '+time
+    : 'Demo data (offline sample)';
+}
+async function boot(){
+  $$('nav.tabs button').forEach(btn=>btn.addEventListener('click',()=>setView(btn.dataset.view)));
+  $('#themeBtn').addEventListener('click',()=>{
+    const r=document.documentElement;
+    const cur=r.getAttribute('data-theme');
+    const dark=window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDark=cur?cur==='dark':dark;
+    r.setAttribute('data-theme',isDark?'light':'dark');
+    renderAll(); // re-render for chart chrome colors baked into SVG attrs via CSS vars (vars resolve live, but re-render keeps layout fresh)
+  });
+  $('#bannerClose').addEventListener('click',()=>$('#banner').remove());
+  $('#boatSel').addEventListener('change',e=>{state.boatKey=e.target.value;state.boatFactor=parseFloat(e.target.value);renderAll();});
+  $('#areaSel').addEventListener('change',e=>{state.area=e.target.value;renderInletCards();});
+  await loadData();
+  updateModeBadge();
+  renderAll();
+}
+boot();
+
+</script>
+</body>
+</html>
