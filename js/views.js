@@ -17,6 +17,25 @@ function chipFor(cls, extra){
   c.textContent=m.ic+' '+m.label+(extra?(' '+extra):'');
   return c;
 }
+// unmissable per-source synthetic-data marker (rendered wherever a live:false source feeds the UI)
+function simChip(parent){
+  const c=el('span','chip sim',parent,'⚠ SIMULATED — source unreachable');
+  return c;
+}
+// which sources fell back to synthetic data (drives the mode-badge breakdown)
+function failedSources(){
+  const out=[];
+  const d=state.data; if(!d) return out;
+  CONFIG.inlets.forEach(i=>{const s=d.inlets[i.id]; if(s&&s.live===false) out.push(i.name+' — inlet forecast');});
+  CONFIG.zones.forEach(z=>{const s=d.zones[z.id]; if(s&&s.live===false) out.push(z.name+' — offshore zone');});
+  const seen=new Set();
+  CONFIG.inlets.forEach(i=>{
+    const t=d.tides[i.tideSta];
+    if(t&&t.live===false&&!seen.has(i.tideSta)){ seen.add(i.tideSta); out.push('Tide station '+i.tideSta+' ('+i.tideName+')'); }
+  });
+  if(d.grid&&d.grid.live===false) out.push('Map SST / wind grid layers');
+  return out;
+}
 
 function renderInletCards(){
   const mp=$('#coastPanel');
@@ -36,19 +55,22 @@ function renderInletCards(){
     const card=el('div','card',grid);
     card.setAttribute('role','button'); card.tabIndex=0;
     const h3=el('h3','',card); h3.textContent=inl.name; el('span','area',h3,inl.area);
+    const dLive=state.data.inlets[inl.id].live!==false;
     const chiprow=el('div','',card); chiprow.style.margin='6px 0 2px';
     chiprow.appendChild(chipFor(now.cls));
+    if(!dLive){const s=simChip(chiprow);s.style.marginLeft='6px';}
     if(now.conf==='low'){const g=el('span','chip ghost',chiprow,'models disagree');g.style.marginLeft='6px';}
     const stats=el('div','statrow',card);
     const s1=el('div','stat',stats); el('div','lbl',s1,'Seas'); el('div','val',s1,now.hs+' ft'); el('div','sub',s1,'@ '+now.tp+' s '+compass(now.dir));
     const s2=el('div','stat',stats); el('div','lbl',s2,'Wind'); el('div','val',s2,now.wind+' kn'); el('div','sub',s2,compass(now.wdir??0)+(now.gst?' G'+now.gst:''));
     const s3=el('div','stat',stats); el('div','lbl',s3,'Tide');
-    el('div','val',s3, now.ebb>0.45?'Ebb':now.ebb>0.05?'Falling':'Flood/slack');
-    el('div','sub',s3, now.tideH!=null?now.tideH.toFixed(1)+' ft MLLW':'');
+    el('div','val',s3, now.tideLive?(now.ebb>0.45?'Ebb':now.ebb>0.05?'Falling':'Flood/slack'):'No data');
+    el('div','sub',s3, now.tideLive&&now.tideH!=null?now.tideH.toFixed(1)+' ft MLLW':'');
     statusStrip(card,hours.slice(0,CONFIG.hoursDetail),{compact:true});
     const wins=findWindows(hours,CONFIG.hoursDetail);
     const nw=el('div','nextwin',card);
-    if(now.cls==='good'&&wins.length){ nw.textContent='In a window now — holds until '; const b=el('strong','',nw,timeRangeLabel(wins[0].from,new Date(wins[0].to.getTime()+36e5)).split('–').pop()); }
+    if(!dLive) nw.textContent='Data unavailable — check official NWS forecasts.';
+    else if(now.cls==='good'&&wins.length){ nw.textContent='In a window now — holds until '; const b=el('strong','',nw,timeRangeLabel(wins[0].from,new Date(wins[0].to.getTime()+36e5)).split('–').pop()); }
     else if(wins.length){ nw.textContent='Next window: '; el('strong','',nw,timeRangeLabel(wins[0].from,new Date(wins[0].to.getTime()+36e5))); }
     else nw.textContent='No favorable window in the next 72 h for this boat size.';
     const open=()=>{state.detailInlet=inl.id; renderDetail(); setView('detail');};
@@ -66,6 +88,8 @@ function renderDetail(){
   const head=el('div','detailhead',view);
   const h2=el('h2','',head,inl.name);
   head.appendChild(chipFor(hours[0].cls));
+  const dLive=state.data.inlets[inl.id].live!==false;
+  if(!dLive) simChip(head);
   if(hours[0].conf==='low') el('span','chip ghost',head,'models disagree');
   el('p','inletnote',view,inl.note);
 
@@ -73,6 +97,7 @@ function renderDetail(){
   const p0=el('div','panel',view);
   el('h4','',p0,'Condition windows — next 72 h');
   el('p','psub',p0,'Boat class: '+(CONFIG.boats[state.boatKey]||'')+' · tide station: '+inl.tideName);
+  if(!dLive) el('p','psub simnote',p0,'Forecast source unreachable — the strip and windows below are simulated samples. Check official NWS marine forecasts before planning.');
   statusStrip(p0,hours.slice(0,CONFIG.hoursDetail),{});
   stripLegend(p0);
   const wins=findWindows(hours,CONFIG.hoursDetail);
@@ -93,7 +118,8 @@ function renderDetail(){
   const fc=el('div','factorchips',p1);
   const f1=el('span','fchip',fc); f1.append('Sea state '); el('b','',f1,'−'+now.pSea); f1.append(' · '+now.hs+' ft @ '+now.tp+' s '+compass(now.dir));
   const f2=el('span','fchip',fc); f2.append('Wind '); el('b','',f2,'−'+now.pWind); f2.append(' · '+now.wind+' kn '+compass(now.wdir??0));
-  const f3=el('span','fchip',fc); f3.append('Tide × bar '); el('b','',f3,'−'+now.pTide); f3.append(' · '+(now.ebb>0.45?'ebb':now.ebb>0.05?'falling':'flood/slack')+(now.opp>0.5?' against the swell':''));
+  const f3=el('span','fchip',fc); f3.append('Tide × bar '); el('b','',f3,'−'+now.pTide);
+  f3.append(' · '+(now.tideLive?(now.ebb>0.45?'ebb':now.ebb>0.05?'falling':'flood/slack')+(now.opp>0.5?' against the swell':''):'tide unavailable — excluded'));
   const f4=el('span','fchip',fc); f4.append('Score '); el('b','',f4,String(now.score)+' / 100');
 
   // wave chart
@@ -128,11 +154,18 @@ function renderDetail(){
     const k=el('span','key',lg3); const lk=el('span','lk',k); lk.style.background=c; el('span','',k,nm);
   });
 
-  // tide chart
+  // tide chart — never claim CO-OPS for a synthetic tide
+  const tRec=state.data.tides[inl.tideSta];
   const p4=el('div','panel',view);
-  el('h4','',p4,'Predicted tide — '+inl.tideName);
-  el('p','psub',p4,'NOAA CO-OPS predictions, ft MLLW. Falling limb = ebb over the bar.');
-  tideChart(p4,state.data.tides[inl.tideSta],CONFIG.hoursDetail);
+  if(tRec&&tRec.live){
+    el('h4','',p4,'Predicted tide — '+inl.tideName);
+    el('p','psub',p4,'NOAA CO-OPS predictions, ft MLLW. Falling limb = ebb over the bar.');
+  }else{
+    const th=el('h4','',p4,'SIMULATED TIDE — do not use for timing');
+    simChip(th).style.marginLeft='8px';
+    el('p','psub simnote',p4,'The tide station was unreachable; this curve is a synthetic sample with a random phase. It is excluded from the score. Get real tides from NOAA CO-OPS before timing a crossing.');
+  }
+  if(tRec) tideChart(p4,tRec.pts,CONFIG.hoursDetail);
 
   // hourly table (a11y twin)
   const p5=el('div','panel',view);
@@ -217,6 +250,13 @@ function renderOffshore(){
   const inletHours=state.scored.inlets[inl.id];
 
   el('p','viewsub',body,zone.note+' Run ≈ '+zone.run_nm+' nm each way from '+inl.name+'. Segments: run out 4–8 am (inlet + open water), on the grounds 8 am–2 pm, run home 2–6 pm.');
+  const zLive=zd.live!==false, depLive=state.data.inlets[inl.id].live!==false;
+  if(!zLive||!depLive){
+    const sr=el('div','',body); sr.style.margin='2px 0 8px';
+    if(!zLive){const c=simChip(sr); c.textContent='⚠ SIMULATED — '+zone.name+' source unreachable'; c.style.marginRight='6px';}
+    if(!depLive){const c=simChip(sr); c.textContent='⚠ SIMULATED — '+inl.name+' source unreachable';}
+    el('p','psub simnote',sr,'Day plans below include simulated segments — check official NWS offshore forecasts.');
+  }
 
   const mapP=el('div','panel mappanel',body);
   const mh=el('div','maphead',mapP); el('h4','',mh,'The run');
@@ -257,8 +297,9 @@ function renderOffshore(){
 
   // 7-day offshore wave chart
   const p=el('div','panel',body);
-  el('h4','',p,'Offshore seas at the grounds — 7 days, model comparison');
-  el('p','psub',p,'Significant wave height at '+zone.name+'.');
+  const ph=el('h4','',p,'Offshore seas at the grounds — 7 days, model comparison');
+  if(!zLive) simChip(ph).style.marginLeft='8px';
+  el('p','psub',p,'Significant wave height at '+zone.name+(zLive?'.':' — simulated sample, source unreachable.'));
   const mt=zd.marine.t.filter(t=>t>=state.scored.start).slice(0,CONFIG.hoursPlanner);
   const i0=zd.marine.t.findIndex(t=>t>=state.scored.start);
   lineChart(p,{series:[
@@ -352,4 +393,23 @@ function updateModeBadge(){
   t.textContent = state.mode==='live' ? 'Live data · '+time
     : state.mode==='mixed' ? 'Partial live · '+time
     : 'Demo data (offline sample)';
+  // source breakdown dropdown (opened by clicking the badge)
+  const p=$('#modeSources'); if(!p) return;
+  p.textContent='';
+  const fails=failedSources();
+  if(fails.length){
+    el('h5','',p,'Simulated sources — unreachable');
+    const ul=el('ul','',p);
+    fails.forEach(f=>el('li','sim',ul,f));
+    el('p','',p,'Everything not listed is live. Verify against official NWS forecasts.');
+  } else {
+    el('h5','',p,'Data sources');
+    el('p','',p,state.mode==='live'?'All sources live.':'Source status unavailable.');
+  }
+}
+function toggleModeSources(){
+  const b=$('#modeBadge'), p=$('#modeSources');
+  const open=p.hasAttribute('hidden');
+  if(open) p.removeAttribute('hidden'); else p.setAttribute('hidden','');
+  b.setAttribute('aria-expanded',open?'true':'false');
 }

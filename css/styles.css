@@ -59,7 +59,7 @@ header.app {
   border-bottom:1px solid var(--hairline);
   padding:10px 16px 0;
 }
-.brandrow { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.brandrow { display:flex; align-items:center; gap:10px; flex-wrap:wrap; position:relative; }
 .logo { font-weight:700; font-size:20px; letter-spacing:-0.02em; }
 .logo .cast { color:var(--accent); }
 .proto-tag {
@@ -67,11 +67,24 @@ header.app {
   color:var(--ink-3); border:1px solid var(--hairline); border-radius:4px; padding:2px 6px;
 }
 .mode-badge {
-  font-size:11px; font-weight:600; padding:3px 8px; border-radius:20px;
+  font-size:11px; font-weight:600; padding:3px 8px; border-radius:20px; border:none;
+  font-family:inherit; cursor:pointer;
   background:var(--chip-bg); color:var(--ink-2); display:inline-flex; align-items:center; gap:6px;
 }
+.mode-badge:hover { outline:1px solid var(--hairline); }
 .mode-badge .dot { width:7px; height:7px; border-radius:50%; background:var(--ink-3); }
 .mode-badge.live .dot { background:var(--st-good); }
+/* mode-badge dropdown: which sources are live vs simulated */
+.mode-sources {
+  position:absolute; top:100%; left:0; z-index:60; min-width:240px; max-width:340px;
+  background:var(--page); border:1px solid var(--hairline); border-radius:10px;
+  padding:10px 12px; font-size:12px; color:var(--ink-2);
+  box-shadow:0 6px 20px rgba(0,0,0,.18);
+}
+.mode-sources h5 { margin:0 0 6px; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3); }
+.mode-sources ul { margin:0; padding-left:16px; }
+.mode-sources li { margin:2px 0; }
+.mode-sources li.sim { color:var(--st-critical); font-weight:600; }
 .spacer { flex:1; }
 .iconbtn {
   background:none; border:1px solid var(--hairline); color:var(--ink-2);
@@ -148,6 +161,12 @@ p.viewsub { font-size:13px; color:var(--ink-2); margin-bottom:14px; }
 .chip.serious { background:var(--st-serious); color:#3d1400; }
 .chip.critical { background:var(--st-critical); }
 .chip.ghost { background:var(--chip-bg); color:var(--ink-2); font-weight:600; }
+/* synthetic-source marker — deliberately loud; never restyle to blend in */
+.chip.sim {
+  background:repeating-linear-gradient(135deg, var(--st-critical) 0 8px, #7a1020 8px 16px);
+  color:#fff; letter-spacing:.04em; text-transform:uppercase;
+}
+.simnote { color:var(--st-critical); font-weight:600; }
 
 /* status strip */
 .strip { margin-top:10px; }

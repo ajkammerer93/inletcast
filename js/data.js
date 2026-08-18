@@ -247,8 +247,8 @@ async function loadData(){
       try{
         const t=await fetchTides(sta);
         if(!t.length) throw new Error('empty');
-        data.tides[sta]=t; liveOK++;
-      }catch(e){ data.tides[sta]=synthTide(sta,start,n); liveFail++; }
+        data.tides[sta]={pts:t, live:true}; liveOK++;
+      }catch(e){ data.tides[sta]={pts:synthTide(sta,start,n), live:false}; liveFail++; }
     })());
   }
   await Promise.allSettled(jobs);

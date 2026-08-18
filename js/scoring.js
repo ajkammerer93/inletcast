@@ -42,8 +42,11 @@ function scoreHour(inl, when, boatFactor){
   let pWind=clamp((wind-11)*2.1,0,26)+clamp(((gst??wind*1.3)-18)*0.7,0,8);
   if(onshore>0.3&&wind>12) pWind+=4;
   pWind=clamp(pWind,0,34);
-  // ebb opposition over the bar
-  const td=tideSlope(state.data.tides[inl.tideSta],when);
+  // ebb opposition over the bar — only from a live tide; a synthetic
+  // (random-phase) tide must never shape a real inlet's score
+  const tRec=state.data.tides[inl.tideSta];
+  const tideLive=!!(tRec&&tRec.live);
+  const td=tideLive?tideSlope(tRec.pts,when):{slope:0, height:null};
   const ebb=clamp(-td.slope/0.9,0,1);                  // 0..1 ebb strength
   const opp=clamp(1-angDiff(dir,inl.bearing)/75,0,1);  // swell arriving straight up the channel
   let pTide=ebb*(0.35+0.65*opp)*inl.shoal*(5+hsEff*3.4+clamp(9-tp,0,4)*1.6);
@@ -60,7 +63,7 @@ function scoreHour(inl, when, boatFactor){
   const spreadHs=(hsG!=null&&hsE!=null)?Math.abs(hsG-hsE):0;
   const spreadW=(spdG!=null&&spdE!=null)?Math.abs(spdG-spdE):0;
   const conf=(spreadHs>1.6||spreadW>7)?'low':(spreadHs>0.9||spreadW>4.5)?'med':'high';
-  return { t:when, score, cls, conf,
+  return { t:when, score, cls, conf, tideLive,
     hs:+hs.toFixed(1), tp:+tp.toFixed(1), dir, wind:+wind.toFixed(0), wdir, gst:gst==null?null:+gst.toFixed(0),
     tideH:td.height, ebb:+ebb.toFixed(2), opp:+opp.toFixed(2),
     pSea:Math.round(pSea), pWind:Math.round(pWind), pTide:Math.round(pTide) };

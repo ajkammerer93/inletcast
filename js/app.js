@@ -29,6 +29,7 @@ async function boot(){
     renderAll(); // re-render for chart chrome colors baked into SVG attrs via CSS vars (vars resolve live, but re-render keeps layout fresh)
   });
   $('#bannerClose').addEventListener('click',()=>$('#banner').remove());
+  $('#modeBadge').addEventListener('click',toggleModeSources);
   $('#boatSel').addEventListener('change',e=>{state.boatKey=e.target.value;state.boatFactor=parseFloat(e.target.value);renderAll();});
   $('#areaSel').addEventListener('change',e=>{state.area=e.target.value;renderInletCards();});
   await loadData();
