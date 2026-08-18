@@ -120,6 +120,8 @@ function renderDetail(){
   const f2=el('span','fchip',fc); f2.append('Wind '); el('b','',f2,'−'+now.pWind); f2.append(' · '+now.wind+' kn '+compass(now.wdir??0));
   const f3=el('span','fchip',fc); f3.append('Tide × bar '); el('b','',f3,'−'+now.pTide);
   f3.append(' · '+(now.tideLive?(now.ebb>0.45?'ebb':now.ebb>0.05?'falling':'flood/slack')+(now.opp>0.5?' against the swell':''):'tide unavailable — excluded'));
+  const f5=el('span','fchip',fc); f5.append('Bar break '); el('b','',f5,'−'+now.pBar);
+  f5.append(' · shoaled-height proxy '+now.hb+' ft');
   const f4=el('span','fchip',fc); f4.append('Score '); el('b','',f4,String(now.score)+' / 100');
 
   // wave chart
@@ -160,6 +162,7 @@ function renderDetail(){
   if(tRec&&tRec.live){
     el('h4','',p4,'Predicted tide — '+inl.tideName);
     el('p','psub',p4,'NOAA CO-OPS predictions, ft MLLW. Falling limb = ebb over the bar.');
+    el('p','psub',p4,'Timing from '+inl.tideName+'; slack at the mouth can lag the station by an hour or more — the ebb term is widened to cover that.');
   }else{
     const th=el('h4','',p4,'SIMULATED TIDE — do not use for timing');
     simChip(th).style.marginLeft='8px';
@@ -230,22 +233,11 @@ function renderOffshore(){
   const inl=CONFIG.inlets.find(i=>i.id===depSel.value);
   const zone=CONFIG.zones.find(z=>z.id===zoneSel.value);
   const zd=state.data.zones[zone.id];
-  // score the zone point hours with a simplified open-water rule (no tide/bar term)
+  // score the zone point hours through the shared core (tide/bar terms off, wind-against-Stream on)
   const zoneHours=[];
   for(let i=0;i<CONFIG.hoursPlanner;i++){
-    const when=new Date(state.scored.start.getTime()+i*36e5);
-    const hsG=seriesAt(zd.marine.t,zd.marine.gfs.hs,when), hsE=seriesAt(zd.marine.t,zd.marine.ecmwf.hs,when);
-    const spdG=seriesAt(zd.wind.t,zd.wind.gfs.spd,when), spdE=seriesAt(zd.wind.t,zd.wind.ecmwf.spd,when);
-    const tp=seriesAt(zd.marine.t,zd.marine.gfs.tp,when)??9;
-    if(hsG==null||spdG==null) continue;
-    const hs=hsE!=null?(hsG+hsE)/2:hsG, wind=spdE!=null?(spdG+spdE)/2:spdG;
-    const hsEff=hs*state.boatFactor;
-    let p=clamp((hsEff-3)*8,0,50)+clamp((wind-12)*2.2,0,32);
-    if(tp<7) p+=clamp((7-tp)*3,0,12);
-    const score=Math.round(clamp(100-p,0,100));
-    let cls; if(hsEff>=9||wind>=25||score<25)cls='critical';else if(score>=70)cls='good';else if(score>=45)cls='warn';else cls='serious';
-    const spread=(hsG!=null&&hsE!=null)?Math.abs(hsG-hsE):0;
-    zoneHours.push({t:when,score,cls,hs:+hs.toFixed(1),tp:+tp.toFixed(1),wind:Math.round(wind),wdir:seriesAt(zd.wind.t,zd.wind.gfs.dir,when),dir:seriesAt(zd.marine.t,zd.marine.gfs.dir,when)??120,conf:spread>1.8?'low':spread>1?'med':'high',ebb:0,opp:0});
+    const h=zoneScoreHour(zone,new Date(state.scored.start.getTime()+i*36e5),state.boatFactor);
+    if(h) zoneHours.push(h);
   }
   const inletHours=state.scored.inlets[inl.id];
 
@@ -369,9 +361,9 @@ function renderMethod(){
   const add=(h,t)=>{if(h)el('h4','',b,h);el('p','',b,t);};
   add(null,'InletCast is a prototype by Ghosttree Technical Solutions — a working demonstration of inlet-scale condition guidance for the Southeast NC coast, built by a forecaster who runs these inlets.');
   add('Data','Wave guidance comes from two independent operational wave models (NOAA GFS-Wave and ECMWF WAM) at a nearshore point off each inlet, via the Open-Meteo API. Winds are GFS and ECMWF 10 m fields. Tides are NOAA CO-OPS harmonic predictions from the nearest reference station. When live sources are unreachable, the app runs on clearly-labeled synthetic demo data so you can still explore the interface.');
-  add('The score','Each hour gets a 0–100 score built from three transparent penalties: sea state (height and short-period steepness), wind (speed, gusts, onshore component), and the tide term — ebb strength multiplied by how directly the swell opposes the channel, weighted by each inlet’s shoaling behavior. The score is scaled by your boat class. Nothing is a black box: the "why" panel shows every penalty.');
+  add('The score','Each hour gets a 0–100 score built from four transparent penalties: sea state (height and short-period steepness), wind (speed, gusts, onshore component), a bar-breaking term — a shoaled-height proxy that grows with swell period and each inlet’s shoaling factor, because long-period energy is what shoals, jacks, and breaks on an ebb delta — and the tide term: ebb strength multiplied by how directly the swell opposes the channel, weighted by each inlet’s shoaling behavior. Swell direction and period come from the models’ swell partition when available, so wind chop cannot hide an opposed ground swell. The ebb strength is deliberately widened about ±90 minutes, since the tide stations are timing proxies. On top of the score, hard overrides force Hazardous whenever the raw sea height can break a shoal bar — regardless of boat class, which scales comfort, never a breaking bar — and a strong ebb against a long-period swell over a shoal bar forces at least Rough. Nothing is a black box: the "why" panel shows every penalty.');
   add('What the classes mean','Favorable (✓): conditions models suggest a well-found boat of your class handles comfortably. Marginal (!): doable for experienced operators, uncomfortable, timing matters. Rough (✕): most operators should wait for the next window. Hazardous (⚠): conditions at or beyond small-craft-advisory character at the inlet.');
-  add('What this prototype does not yet do','No inlet-specific bathymetry or surf-zone wave transformation (the production version applies a per-inlet shoaling model tuned against buoy and camera verification); no real-time buoy assimilation; no USACE survey ingestion; tide stations are nearest-reference proxies for some inlets; no current predictions at the inlet mouth. Every one of these is on the roadmap — and the scoring will be verified publicly against observations, the same way we verify NOAA operational models.');
+  add('What this prototype does not yet do','No inlet-specific bathymetry or surf-zone wave transformation (the production version applies a per-inlet shoaling model tuned against buoy and camera verification); no real-time buoy assimilation; no USACE survey ingestion; tide stations are nearest-reference proxies for some inlets; no current predictions at the inlet mouth; wind against the Stream is only a crude opposing-wind heuristic, not a current or eddy model; no convection or thunderstorm input for the afternoon return legs. Every one of these is on the roadmap — and the scoring will be verified publicly against observations, the same way we verify NOAA operational models.');
   add('Map layers','The SST fill prefers the MUR 1-km satellite-blended SST analysis (NASA/JPL, served by NOAA CoastWatch) — the same class of data the paid SST chart services sell — and falls back to smoothed NWP-model SST, then labeled demo data, if unreachable. Wind streamlines are sampled from NWP 10 m winds on a grid across Onslow Bay, bilinearly interpolated; the particle animation follows the interpolated wind exactly, in the style of the freesurfforecast swell map. Toggle layers with the SST / Wind buttons; the cursor readout at the bottom-left gives exact interpolated values. Note that in mid-summer the true SST contrast across the west wall is at its annual minimum — a faint August wall is the ocean, not a bug — which is why chlorophyll and altimetry are the planned complements.');
   add('The Gulf Stream line','The orange "west wall" line on the map is detected live: we sample NWP sea-surface temperature along five cross-shelf transects and place the wall at the strongest temperature step on each line, then connect them. Model SST is an analysis product at ~25 km resolution — good enough to see whether the stream is riding in or pushed offshore, not good enough to find a finger or an eddy edge. Production versions would blend satellite SST (GOES, VIIRS) and ocean model output (RTOFS) for chart-service-grade edges. Treat it as orientation, not navigation.');
   add('The honest caveat','A forecast cannot see today’s bar. Inlets shoal, channels move, and a model point a few miles offshore is not the standing wave on the ebb delta. Treat every window as a hypothesis to verify with your eyes, official NWS forecasts, and local knowledge.');

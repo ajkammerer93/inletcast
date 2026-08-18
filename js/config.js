@@ -37,12 +37,91 @@ const CONFIG = {
       note:'Deep, marked shipping channel to Morehead City — the standard Big Rock departure. Ebb chop at the sea buoy in a S blow, but rarely closes.' },
   ],
   zones: [
-    { id:'bigrock', name:'The Big Rock zone (off Beaufort)', lat:34.20, lon:-75.90, run_nm:50,
+    // streamDir: azimuth the Gulf Stream flows TOWARD at the zone — wind blowing from near
+    // this heading (N-quadrant here) opposes the current and stands the sea up
+    { id:'bigrock', name:'The Big Rock zone (off Beaufort)', lat:34.20, lon:-75.90, run_nm:50, streamDir:55,
       note:'~50 nm SSE of Beaufort Inlet toward the 100-fathom curve.' },
-    { id:'sameole', name:'Gulf Stream — Same Ole / Steeples (off Masonboro)', lat:33.70, lon:-77.05, run_nm:55,
+    { id:'sameole', name:'Gulf Stream — Same Ole / Steeples (off Masonboro)', lat:33.70, lon:-77.05, run_nm:55, streamDir:45,
       note:'~55 nm SE of Masonboro Inlet.' },
   ],
   boats: { '1.25':'18–22 ft', '1.0':'23–27 ft', '0.8':'28 ft +' },
+};
+
+/* ---------------- scoring model constants ----------------
+   Every tunable number in the scoring core lives here; each maps to a phrase in the
+   Method tab ("The score" / "What the classes mean" / the offshore planner notes). */
+const SCORING = {
+  // sea state — Method: "height and short-period steepness"
+  seaBaseFt: 2,          // ft of effective height that costs nothing
+  seaSlope: 9,           // penalty points per effective ft above seaBaseFt
+  seaHeightMax: 42,      // cap on the height part of the sea-state penalty
+  steepTp: 9,            // s — total-sea periods below this read as steep, breaking chop
+  steepSlope: 2.2,       // penalty points per second below steepTp
+  steepMax: 14,          // cap on the raw steepness part
+  steepHsRef: 3,         // ft — steepness matters more in bigger seas; scaled around this height
+  steepHsScaleMin: 0.4,  // floor of the height scaling on the steepness part
+  steepHsScaleMax: 1.6,  // ceiling of the height scaling on the steepness part
+  seaMax: 55,            // cap on the whole sea-state penalty
+  // wind — Method: "speed, gusts, onshore component"
+  windBaseKn: 11,        // kn of sustained wind that costs nothing
+  windSlope: 2.1,        // penalty points per kn above windBaseKn
+  windSpdMax: 26,        // cap on the sustained-wind part
+  gustFallback: 1.3,     // assumed gust factor when the model provides no gusts
+  gustBaseKn: 18,        // kn of gust that costs nothing
+  gustSlope: 0.7,        // penalty points per kn of gust above gustBaseKn
+  gustMax: 8,            // cap on the gust part
+  onshoreCos: 0.3,       // cos(wind-to-channel angle) above which wind counts as onshore
+  onshoreMinKn: 12,      // kn — onshore bump only applies above this speed
+  onshoreBump: 4,        // extra points for wind blowing in from the sea
+  windMax: 34,           // cap on the whole wind penalty
+  // bar breaking — Method: "long-period energy is what shoals, jacks, and breaks on an ebb delta"
+  hbTpFloor: 6,          // s — period floor in the shoaled-height proxy
+  hbTpRef: 9,            // s — reference period: Hb = hs·√(Tp/9)·shoal, monotone in period
+  hbFreeFt: 4,           // ft of shoaled-height proxy before the bar term costs anything
+  hbSlope: 6,            // penalty points per shoaled ft above hbFreeFt
+  hbMax: 30,             // cap on the bar-breaking penalty
+  // tide × bar — Method: "ebb strength multiplied by swell opposition, weighted by shoaling"
+  ebbFullSlope: 0.9,     // ft/h of falling water at the station that counts as full ebb
+  ebbSmearHours: 1,      // ± hours the ebb strength is widened — station timing is a distant proxy
+  oppHalfWidthDeg: 75,   // deg off the channel bearing at which swell opposition fades to zero
+  tideBaseW: 0.35,       // tide-term weight with no opposition at all
+  tideOppW: 0.65,        // additional tide-term weight at dead-on opposition
+  tideBasePts: 5,        // base points of a full ebb before height/period scaling
+  tideHsSlope: 3.4,      // tide-term points per effective ft of sea
+  tideShortTpClamp: 4,   // s — how much short-period excess the ebb-chop term counts
+  tideShortTpSlope: 1.6, // tide-term points per second of short-period excess (chop on ebb)
+  tideMax: 38,           // cap on the tide × bar penalty
+  // wind against the Stream — offshore planner: N-quadrant wind opposing the current axis
+  streamOppDeg: 60,      // deg — wind within this of blowing straight against the flow counts
+  streamMinKn: 12,       // kn — below this an opposing wind costs nothing
+  streamSlope: 1.5,      // penalty points per kn above streamMinKn when opposing
+  streamMax: 18,         // cap on the wind-against-Stream penalty
+  // swell partition — fall back to total sea when the partition is missing or tiny
+  swellMinHs: 0.5,       // ft — swell partitions below this are noise; use total-sea dir/period
+  // class thresholds — Method: "What the classes mean"
+  goodMin: 70,           // score at/above which an hour is Favorable
+  warnMin: 45,           // score at/above which an hour is Marginal
+  // hazard overrides — Method: "Hazardous: at or beyond small-craft-advisory character"
+  critHsEff: 8,          // ft effective seas that force Hazardous everywhere
+  critWindKn: 25,        // kn sustained that forces Hazardous everywhere
+  critScoreBelow: 25,    // score below this forces Hazardous
+  shoalBar: 1.3,         // shoal factor at/above which the raw-height bar overrides apply
+  critRawHs: 6,          // ft RAW seas that force Hazardous on a shoal inlet at any boat class
+  critRawHsLong: 5,      // ft RAW seas that force Hazardous on a shoal inlet when the period is long
+  critLongTp: 11,        // s — swell period that arms the critRawHsLong override
+  // compound ebb-against-swell override — the named hazard mechanism of these inlets
+  compEbb: 0.7,          // ebb strength above which the compound override arms
+  compOpp: 0.6,          // swell opposition above which the compound override arms
+  compTpHi: 12,          // s — at/above this swell period the raw-height threshold is compHsHi
+  compHsHi: 3,           // ft RAW seas — enough at compTpHi to force at least Rough
+  compTpLo: 10,          // s — at/above this swell period the raw-height threshold is compHsLo
+  compHsLo: 4,           // ft RAW seas — enough at compTpLo to force at least Rough
+  compCritX: 1.5,        // × the threshold at which the compound override escalates to Hazardous
+  // model spread → confidence — shared by the inlet and offshore-zone paths
+  confHsLow: 1.6,        // ft of wave-height spread above which confidence is low
+  confWLow: 7,           // kn of wind spread above which confidence is low
+  confHsMed: 0.9,        // ft of wave-height spread above which confidence is medium
+  confWMed: 4.5,         // kn of wind spread above which confidence is medium
 };
 
 /* ---------------- schematic coast map data ---------------- */

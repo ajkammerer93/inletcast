@@ -35,6 +35,15 @@ await scenario('live: all sources up -> live badge, 7 inlet cards, no page error
   assert(fv[1] === '0.6', `footer version is v${fv && fv[1]}, want v0.6`);
   const mv = (text(document, '#methodBody') || '').match(/prototype v(\d+\.\d+)/);
   assert(mv && mv[1] === fv[1], `Method tab version (${mv && mv[1]}) should match footer (${fv[1]})`);
+  // Method honesty list names the offshore-planner gaps
+  const method = text(document, '#methodBody') || '';
+  assert(/wind against the Stream/i.test(method), 'Method lists the wind-against-the-Stream limitation');
+  assert(/thunderstorm/i.test(method), 'Method lists the missing convection/thunderstorm input');
+  // detail view: bar-breaking factor chip and tide-timing caveat are user-visible
+  cards[0].click();
+  const detail = document.getElementById('view-detail');
+  assert(/Bar break/.test(detail.textContent), 'detail "why" panel shows the bar-breaking penalty chip');
+  assert(/slack at the mouth can lag/.test(detail.textContent), 'detail tide panel carries the station-timing caveat');
   window.close();
 });
 

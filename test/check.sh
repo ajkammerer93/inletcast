@@ -29,6 +29,9 @@ if (!i) console.log('  (no inline scripts)');
 process.exit(bad ? 1 : 0);
 EOF
 
+echo "== scoring tests =="
+node scoring-tests.mjs || fail=1
+
 echo "== smoke tests =="
 node smoke.mjs || fail=1
 
