@@ -482,8 +482,9 @@ await scenario('marketing & seo: share meta, JSON-LD, hero pitch, person byline,
   // map header copy matches the actual pointer behavior (jsdom is a fine pointer: click-to-open)
   assert(/click one to open the inlet/.test(text(document, '#coastPanel') || ''), 'map copy describes click-to-open on non-touch');
   // person-first byline in Method and footer; the LLC stays in the copyright line only
-  assert(/Built by AJ Kammerer, a marine forecaster who runs these inlets/.test(text(document, '#methodBody') || ''), 'Method leads with the person byline');
-  assert(/Built by AJ Kammerer, a marine forecaster who runs these inlets/.test(text(document, 'footer.disc') || ''), 'footer carries the person byline');
+  assert(/Built by a marine forecaster who runs these inlets/.test(text(document, '#methodBody') || ''), 'Method leads with the forecaster byline');
+  assert(!/Kammerer/.test(document.body.textContent), 'no personal name rendered anywhere on the page');
+  assert(/Built by a marine forecaster who runs these inlets/.test(text(document, 'footer.disc') || ''), 'footer carries the forecaster byline');
   assert(!/Ghosttree/.test(text(document, '#methodBody') || ''), 'Method no longer names the LLC');
   assert(/© 2026 Ghosttree Technical Solutions, LLC/.test(text(document, 'footer.disc') || ''), 'LLC stays in the copyright line');
   assert(!/Monday and Thursday/.test(document.body.textContent), 'no update-cadence promise anywhere on the page');
