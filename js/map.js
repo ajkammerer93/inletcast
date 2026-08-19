@@ -248,16 +248,22 @@ function coastMap(parent, opts){
     const zt=svgEl('text',{x:x+zl.dx,y:y+zl.dy,'text-anchor':zl.anchor,'font-size':10,'font-weight':600,fill:'var(--ink-2)',
       stroke:'var(--surface-1)','stroke-width':3,'paint-order':'stroke'},svg);
     zt.textContent=zl.text;
-    const hit=svgEl('circle',{cx:x,cy:y,r:HITR,fill:'transparent',cursor:'pointer'},svg);
+    // keyboard-operable hit target with a real name — the tooltip data lives in the label
+    const zsst=sstGrid?gridSample(sstGrid,sstGrid.sst,z.lon,z.lat):null;
+    const hit=svgEl('circle',{cx:x,cy:y,r:HITR,fill:'transparent',cursor:'pointer',
+      tabindex:'0',role:'button',
+      'aria-label':z.name+' — about '+z.run_nm+' nautical mile run'+(zsst!=null?', SST '+(zsst*9/5+32).toFixed(0)+' °F':'')},svg);
     const showZone=(ev,pin)=>{
       if(tipPinned&&!pin) return;
       const rows=[{val:'≈ '+z.run_nm+' nm run',lbl:''}];
-      if(sstGrid){
-        const s=gridSample(sstGrid,sstGrid.sst,z.lon,z.lat);
-        if(s!=null) rows.push({val:(s*9/5+32).toFixed(0)+' °F',lbl:'SST ('+(sstSource==='mur'?'satellite':sstSource.toUpperCase())+')'});
-      }
+      if(zsst!=null) rows.push({val:(zsst*9/5+32).toFixed(0)+' °F',lbl:'SST ('+(sstSource==='mur'?'satellite':sstSource.toUpperCase())+')'});
       showTip(ev.clientX,ev.clientY,z.name,rows);
       if(pin) pinTip(ev);
+    };
+    const activateZone=()=>{
+      state.armedMarker=null; hideTip(true);
+      if(opts&&opts.route){ $('#zoneSel').value=z.id; renderOffshore(); }
+      else setView('offshore');
     };
     hit.addEventListener('pointermove',ev=>showZone(ev,false));
     hit.addEventListener('pointerdown',ev=>showZone(ev,true));
@@ -265,10 +271,9 @@ function coastMap(parent, opts){
     hit.addEventListener('click',()=>{
       // touch: first tap shows the pinned info, second tap activates
       if(isCoarse()&&state.armedMarker!=='zone:'+z.id){ state.armedMarker='zone:'+z.id; return; }
-      state.armedMarker=null; hideTip(true);
-      if(opts&&opts.route){ $('#zoneSel').value=z.id; renderOffshore(); }
-      else setView('offshore');
+      activateZone();
     });
+    hit.addEventListener('keydown',ev=>{ if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); activateZone(); } });
   }
 
   // inlet markers, colored by current condition class (neutral grey until data lands)
@@ -278,14 +283,24 @@ function coastMap(parent, opts){
     const meta=hasData?CLS_META[hours[0].cls]:{ic:'…',label:'Loading',color:'var(--axis)'};
     const x=X(inl.lon),y=Y(inl.lat);
     const sel=opts&&opts.route&&opts.route.inletId===inl.id;
-    if(sel) svgEl('circle',{cx:x,cy:y,r:11,fill:'none',stroke:'var(--accent)','stroke-width':2},svg);
-    svgEl('circle',{cx:x,cy:y,r:6,fill:meta.color,stroke:'var(--surface-1)','stroke-width':2},svg);
+    if(sel) svgEl('circle',{cx:x,cy:y,r:12,fill:'none',stroke:'var(--accent)','stroke-width':2},svg);
+    svgEl('circle',{cx:x,cy:y,r:7,fill:meta.color,stroke:'var(--surface-1)','stroke-width':2},svg);
+    // never color alone: the class glyph rides inside the marker circle
+    const mg=svgEl('text',{x:x,y:y+2.6,'text-anchor':'middle','font-size':8,'font-weight':700,
+      fill:(hasData&&(hours[0].cls==='warn'||hours[0].cls==='serious'))?'#3a2a00':'#fff','pointer-events':'none'},svg);
+    mg.textContent=meta.ic;
     const lb=MAPDATA.labels[inl.id];
     const ldx=lb.dx+(sel&&lb.anchor==='start'?7:0);
     const tx=svgEl('text',{x:x+ldx,y:y+lb.dy+3,'text-anchor':lb.anchor,'font-size':10,'font-weight':600,fill:'var(--ink-2)',
       stroke:'var(--surface-1)','stroke-width':3,'paint-order':'stroke'},svg);
     tx.textContent=inl.short;
-    const hit=svgEl('circle',{cx:x,cy:y,r:HITR,fill:'transparent',cursor:'pointer'},svg);
+    // keyboard-operable hit target with a real name — current conditions live in the label
+    const now0=hasData?hours[0]:null;
+    const hit=svgEl('circle',{cx:x,cy:y,r:HITR,fill:'transparent',cursor:'pointer',
+      tabindex:'0',role:'button',
+      'aria-label':now0
+        ? inl.name+' — '+meta.label+', '+now0.hs+' ft at '+now0.tp+' s, '+now0.wind+' kn '+compass(now0.wdir??0)
+        : inl.name+' — loading forecast'},svg);
     const showInlet=(ev,pin)=>{
       if(tipPinned&&!pin) return;
       const now=hours&&hours[0];
@@ -296,20 +311,25 @@ function coastMap(parent, opts){
       ]:[]);
       if(pin) pinTip(ev);
     };
+    const activateInlet=()=>{
+      state.armedMarker=null; hideTip(true);
+      if(opts&&opts.route){ $('#depSel').value=inl.id; renderOffshore(); }
+      else { state.detailInlet=inl.id; state.lastCardInlet=inl.id; setView('detail'); }
+    };
     hit.addEventListener('pointermove',ev=>showInlet(ev,false));
     hit.addEventListener('pointerdown',ev=>showInlet(ev,true));
     hit.addEventListener('pointerleave',()=>hideTip());
     hit.addEventListener('click',()=>{
       // touch: first tap shows the pinned info, second tap activates
       if(isCoarse()&&state.armedMarker!=='inlet:'+inl.id){ state.armedMarker='inlet:'+inl.id; return; }
-      state.armedMarker=null; hideTip(true);
-      if(opts&&opts.route){ $('#depSel').value=inl.id; renderOffshore(); }
-      else { state.detailInlet=inl.id; setView('detail'); }
+      activateInlet();
     });
+    hit.addEventListener('keydown',ev=>{ if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); activateInlet(); } });
   }
 
-  // wind particle layer (toggleable) — canvas overlay, pointer-events none
-  if(state.layers.wind&&grid){
+  // wind particle layer (toggleable) — canvas overlay, pointer-events none;
+  // skipped entirely under prefers-reduced-motion (the static map stands alone)
+  if(state.layers.wind&&grid&&!prefersReduced()){
     const cv=document.createElement('canvas');
     cv.width=W*2; cv.height=H*2;
     cv.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none;border-radius:10px;';
@@ -359,6 +379,18 @@ function coastMap(parent, opts){
       ? 'SST · MUR satellite analysis'+murNote
       : sstSource==='nwp' ? 'SST · NWP model analysis' : 'SST · demo';
     el('span','sstnote',lg,srcTxt);
+  }
+
+  // text alternative for the pointer-only west-wall overlay: position + strength per transect
+  if(sstGrid){
+    const srcTxt=sstSource==='mur'?'satellite SST':sstSource==='nwp'?'NWP SST':'demo SST';
+    if(front.length>=3){
+      const weakLine=front.filter(f=>f.weak).length>front.length/2;
+      el('div','wallnote',parent,(weakLine?'Strongest SST front':'Gulf Stream west wall')+' ('+srcTxt+'): '+
+        front.map(f=>'off '+f.name+' Δ '+f.g.toFixed(1)+' °C').join(', ')+'.');
+    }else{
+      el('div','wallnote',parent,'No clear Gulf Stream front detected in the current '+srcTxt+' field.');
+    }
   }
 
   // unmissable watermark when everything on this map is synthetic (never while still loading)

@@ -10,6 +10,7 @@ const state = {
   layers: { sst:true, wind:true },
   view: 'inlets',
   detailInlet: null,
+  lastCardInlet: null,     // card that opened the current detail view — refocused on back
   showTable: {},
   armedMarker: null,       // two-tap map markers on touch: which marker's info is showing
   data: { inlets:{}, zones:{}, tides:{} },  // filled incrementally by loadData
@@ -54,6 +55,16 @@ function maybeRefresh(){
 async function boot(){
   $('#appVer').textContent='v'+APP_VERSION;
   $$('nav.tabs button').forEach(btn=>btn.addEventListener('click',()=>setView(btn.dataset.view)));
+  // roving tabindex: Left/Right arrows move focus through the tablist; Enter/Space activates
+  const tabBtns=$$('nav.tabs button');
+  $('nav.tabs').addEventListener('keydown',e=>{
+    if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight') return;
+    const i=tabBtns.indexOf(document.activeElement); if(i<0) return;
+    e.preventDefault();
+    const j=(i+(e.key==='ArrowRight'?1:-1)+tabBtns.length)%tabBtns.length;
+    tabBtns.forEach((b,k)=>b.tabIndex=k===j?0:-1);
+    tabBtns[j].focus();
+  });
   $('#themeBtn').addEventListener('click',()=>{
     const r=document.documentElement;
     const cur=r.getAttribute('data-theme');

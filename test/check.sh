@@ -35,5 +35,8 @@ node scoring-tests.mjs || fail=1
 echo "== smoke tests =="
 node smoke.mjs || fail=1
 
+echo "== accessibility tests =="
+node a11y-tests.mjs || fail=1
+
 if [ $fail -ne 0 ]; then echo "GATE: FAIL"; exit 1; fi
 echo "GATE: PASS"

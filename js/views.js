@@ -16,16 +16,32 @@ function titleFor(v){
   return t?t+' — '+base:base+' — NC Inlet Condition Windows (Prototype)';
 }
 function setView(v){
+  const prev=state.view;
   state.view=v;
   $$('.view').forEach(x=>x.classList.remove('active'));
   $('#view-'+(v==='detail'?'detail':v)).classList.add('active');
-  $$('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.view===v||(v==='detail'&&b.dataset.view==='inlets')));
+  // tabs pattern: active class + aria-selected + roving tabindex stay in sync
+  $$('nav.tabs button').forEach(b=>{
+    const on=b.dataset.view===v||(v==='detail'&&b.dataset.view==='inlets');
+    b.classList.toggle('active',on);
+    b.setAttribute('aria-selected',on?'true':'false');
+    b.tabIndex=on?0:-1;
+  });
   renderActiveView();           // after the class flip, so charts measure a visible container
   document.title=titleFor(v);
   const h=hashFor(v);
   // don't force '#/inlets' onto a clean URL — keeps the first back press from being a no-op
   if(location.hash!==h&&!(h==='#/inlets'&&location.hash==='')){ try{ location.hash=h; }catch(e){} }
   window.scrollTo({top:0});
+  // focus lands on the incoming view's heading (or, coming back from a detail view,
+  // on the card that opened it) — keyboard users don't restart from the top of the page
+  if(prev&&prev!==v){
+    let tgt=null;
+    if(v==='inlets'&&prev==='detail'&&state.lastCardInlet)
+      tgt=$('#inletCards .card[data-inlet="'+state.lastCardInlet+'"]');
+    if(!tgt){ tgt=$('#view-'+(v==='detail'?'detail':v)+' h2'); if(tgt) tgt.tabIndex=-1; }
+    if(tgt) tgt.focus();
+  }
 }
 // parse the current hash and apply it (boot, hashchange, browser back)
 function applyRoute(){
@@ -64,7 +80,7 @@ function showClassPopover(x,y){
   let pop=document.querySelector('.clspop');
   if(!pop) pop=el('div','clspop',document.body);
   pop.textContent='';
-  el('h5','',pop,'What the classes mean');
+  el('div','popttl',pop,'What the classes mean');
   for(const k of ['good','warn','serious','critical']){
     const m=CLS_META[k];
     const row=el('div','clsrow',pop);
@@ -110,7 +126,7 @@ function renderInletCards(){
   const mp=$('#coastPanel');
   if(mp){
     mp.textContent='';
-    const mh=el('div','maphead',mp); el('h4','',mh,'The coast at a glance');
+    const mh=el('div','maphead',mp); el('h3','',mh,'The coast at a glance');
     el('span','',mh,'markers show current conditions — tap one to open the inlet');
     const sp=el('span','spacer',mh); layerToggles(mh);
     coastMap(mp);
@@ -133,6 +149,7 @@ function renderInletCards(){
     const now=hours[0];
     const card=el('div','card',grid);
     card.setAttribute('role','button'); card.tabIndex=0;
+    card.dataset.inlet=inl.id;   // focus target when the back button returns here
     const h3=el('h3','',card); h3.textContent=inl.name; el('span','area',h3,inl.area);
     const dLive=state.data.inlets[inl.id].live!==false;
     const chiprow=el('div','',card); chiprow.style.margin='6px 0 2px';
@@ -152,7 +169,7 @@ function renderInletCards(){
     else if(now.cls==='good'&&wins.length){ nw.textContent='Scores favorable now — holds until '; const b=el('strong','',nw,timeRangeLabel(wins[0].from,new Date(wins[0].to.getTime()+36e5)).split('–').pop()); }
     else if(wins.length){ nw.textContent='Next window: '; el('strong','',nw,timeRangeLabel(wins[0].from,new Date(wins[0].to.getTime()+36e5))); }
     else nw.textContent='No favorable window in the next 72 h for this boat size.';
-    const open=()=>{state.detailInlet=inl.id; setView('detail');};
+    const open=()=>{state.detailInlet=inl.id; state.lastCardInlet=inl.id; setView('detail');};
     card.addEventListener('click',open);
     card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});
   }
@@ -183,7 +200,7 @@ function renderDetail(){
 
   // windows
   const p0=el('div','panel',view);
-  el('h4','',p0,'Condition windows — next 72 h');
+  el('h3','',p0,'Condition windows — next 72 h');
   el('p','psub',p0,'Boat class: '+(CONFIG.boats[state.boatKey]||'')+' · tide station: '+inl.tideName);
   if(!dLive) el('p','psub simnote',p0,'Forecast source unreachable — the strip and windows below are simulated samples. Check official NWS marine forecasts before planning.');
   statusStrip(p0,hours.slice(0,CONFIG.hoursDetail),{});
@@ -202,7 +219,7 @@ function renderDetail(){
   // why now
   const now=hours[0];
   const p1=el('div','panel',view);
-  el('h4','',p1,'Why it’s scored this way right now');
+  el('h3','',p1,'Why it’s scored this way right now');
   const fc=el('div','factorchips',p1);
   const f1=el('span','fchip',fc); f1.append('Sea state '); el('b','',f1,'−'+now.pSea); f1.append(' · '+now.hs+' ft @ '+now.tp+' s '+compass(now.dir));
   const f2=el('span','fchip',fc); f2.append('Wind '); el('b','',f2,'−'+now.pWind); f2.append(' · '+now.wind+' kn '+compass(now.wdir??0));
@@ -214,7 +231,7 @@ function renderDetail(){
 
   // wave chart
   const p2=el('div','panel',view);
-  const ph2=el('div','panelhead',p2); el('h4','',ph2,'Significant wave height — model comparison'); el('span','spacer',ph2);
+  const ph2=el('div','panelhead',p2); el('h3','',ph2,'Significant wave height — model comparison'); el('span','spacer',ph2);
   el('p','psub',p2,'Nearshore point off the inlet. Two independent wave models; divergence = lower confidence.');
   const d=state.data.inlets[inl.id];
   const n=CONFIG.hoursDetail;
@@ -223,7 +240,8 @@ function renderDetail(){
   lineChart(p2,{series:[
     {name:'GFS-Wave',color:'var(--series-1)',t:mt,v:d.marine.gfs.hs.slice(i0,i0+n)},
     {name:'ECMWF-WAM',color:'var(--series-2)',t:mt,v:d.marine.ecmwf.hs.slice(i0,i0+n)},
-  ],unit:'ft',height:190});
+  ],unit:'ft',height:190,
+  label:'Chart: significant wave height in feet, GFS-Wave vs ECMWF-WAM, next 72 hours — hourly values in the Hourly detail table below'});
   const lg=el('div','legend',p2);
   [['GFS-Wave','var(--series-1)'],['ECMWF-WAM','var(--series-2)']].forEach(([nm,c])=>{
     const k=el('span','key',lg); const lk=el('span','lk',k); lk.style.background=c; el('span','',k,nm);
@@ -231,14 +249,15 @@ function renderDetail(){
 
   // wind chart
   const p3=el('div','panel',view);
-  el('h4','',p3,'Wind — model comparison');
+  el('h3','',p3,'Wind — model comparison');
   el('p','psub',p3,'10 m wind at the nearshore point, knots.');
   const wt=d.wind.t.filter(t=>t>=state.scored.start).slice(0,n);
   const wi0=d.wind.t.findIndex(t=>t>=state.scored.start);
   lineChart(p3,{series:[
     {name:'GFS',color:'var(--series-1)',t:wt,v:d.wind.gfs.spd.slice(wi0,wi0+n)},
     {name:'ECMWF',color:'var(--series-2)',t:wt,v:d.wind.ecmwf.spd.slice(wi0,wi0+n)},
-  ],unit:'kn',height:170});
+  ],unit:'kn',height:170,
+  label:'Chart: 10 m wind speed in knots, GFS vs ECMWF, next 72 hours — hourly values in the Hourly detail table below'});
   const lg3=el('div','legend',p3);
   [['GFS','var(--series-1)'],['ECMWF','var(--series-2)']].forEach(([nm,c])=>{
     const k=el('span','key',lg3); const lk=el('span','lk',k); lk.style.background=c; el('span','',k,nm);
@@ -248,29 +267,33 @@ function renderDetail(){
   const tRec=state.data.tides[inl.tideSta];
   const p4=el('div','panel',view);
   if(tRec&&tRec.live){
-    el('h4','',p4,'Predicted tide — '+inl.tideName);
+    el('h3','',p4,'Predicted tide — '+inl.tideName);
     el('p','psub',p4,'NOAA CO-OPS predictions, ft MLLW. Falling limb = ebb over the bar.');
     el('p','psub',p4,'Timing from '+inl.tideName+'; slack at the mouth can lag the station by an hour or more — the ebb term is widened to cover that.');
   }else{
-    const th=el('h4','',p4,'SIMULATED TIDE — do not use for timing');
+    const th=el('h3','',p4,'SIMULATED TIDE — do not use for timing');
     simChip(th).style.marginLeft='8px';
     el('p','psub simnote',p4,'The tide station was unreachable; this curve is a synthetic sample with a random phase. It is excluded from the score. Get real tides from NOAA CO-OPS before timing a crossing.');
   }
-  if(tRec) tideChart(p4,tRec.pts,CONFIG.hoursDetail);
+  if(tRec) tideChart(p4,tRec.pts,CONFIG.hoursDetail,
+    'Chart: predicted tide height in feet MLLW at '+inl.tideName+', next 72 hours — tide phase per hour in the Hourly detail table below');
 
   // hourly table (a11y twin)
   const p5=el('div','panel',view);
-  const ph5=el('div','panelhead',p5); el('h4','',ph5,'Hourly detail');
+  const ph5=el('div','panelhead',p5); el('h3','',ph5,'Hourly detail');
   el('span','spacer',ph5);
   // touch devices default the table open — it is the no-hover twin of every chart value
   const showT=state.showTable[inl.id]!=null?state.showTable[inl.id]:isCoarse();
-  const tbtn=el('button','iconbtn',ph5, showT?'Hide table':'Show table');
-  tbtn.addEventListener('click',()=>{state.showTable[inl.id]=!showT;renderDetail();});
+  const tbtn=el('button','iconbtn tablebtn',ph5, showT?'Hide table':'Show table');
+  tbtn.addEventListener('click',()=>{
+    state.showTable[inl.id]=!showT;renderDetail();
+    const nb=$('#view-detail .tablebtn'); if(nb) nb.focus(); // re-render swaps the button; keep focus on it
+  });
   if(showT){
     const wrapT=el('div','tablewrap',p5);
     const tb=el('table','data',wrapT);
     const thr=el('tr','',el('thead','',tb));
-    ['Time','Seas ft','Period s','Swell dir','Wind kn','Tide','Score','Class','Agreement'].forEach(h=>el('th','',thr,h));
+    ['Time','Seas ft','Period s','Swell dir','Wind kn','Tide','Score','Class','Agreement'].forEach(h=>{const c=el('th','',thr,h);c.setAttribute('scope','col');});
     const tbody=el('tbody','',tb);
     hours.slice(0,CONFIG.hoursDetail).forEach(h=>{
       const tr=el('tr','',tbody);
@@ -287,12 +310,31 @@ function renderDetail(){
   // sample outlook — canned illustration of the planned paid-tier note; muted styling + tag so it never reads as current guidance
   const p6=el('div','panel sample',view);
   const ph6=el('div','panelhead',p6);
-  el('h4','',ph6,'The written outlook');
+  el('h3','',ph6,'The written outlook');
   el('span','chip ghost sampletag',ph6,'SAMPLE — illustrative, not a current forecast');
   const ol=el('div','outlook',p6);
   el('div','byline',ol,'Illustrative sample of the weekly forecaster note planned for the paid tier · AJ Kammerer');
   el('p','',ol,'Long-period SE energy hangs around while the pressure gradient stays slack — mornings look like the play, with light land breezes early and a building seabreeze chop after lunch. The inlets that care about period (Carolina Beach, New River) will be sportier than the raw heights suggest on the afternoon ebbs.');
   el('p','',ol,'Watch the next trough: the models split on how fast it digs in. GFS is faster and windier; the ECMWF holds the ridge another day. If the ECMWF verifies, a legitimate Gulf Stream window opens before the wind returns.');
+}
+
+/* compact text twin for a chart — same show/hide table pattern the hourly detail uses,
+   so every chart value is reachable without a pointer */
+function chartTable(parent, headers, rows){
+  const bar=el('div','panelhead',parent);
+  el('span','spacer',bar);
+  let open=isCoarse();   // touch devices default tables open, like the hourly detail
+  const btn=el('button','iconbtn tablebtn',bar,'Show table');
+  const wrap=el('div','tablewrap',parent);
+  const tb=el('table','data',wrap);
+  const thr=el('tr','',el('thead','',tb));
+  headers.forEach(h=>{const c=el('th','',thr,h);c.setAttribute('scope','col');});
+  const tbody=el('tbody','',tb);
+  rows.forEach(r=>{const tr=el('tr','',tbody);r.forEach(v=>el('td','',tr,v==null?'–':String(v)));});
+  const sync=()=>{wrap.hidden=!open;btn.textContent=open?'Hide table':'Show table';};
+  btn.addEventListener('click',()=>{open=!open;sync();}); // toggles in place — no re-render, focus stays put
+  sync();
+  return wrap;
 }
 
 /* ---------- offshore planner ---------- */
@@ -345,7 +387,7 @@ function renderOffshore(){
   }
 
   const mapP=el('div','panel mappanel',body);
-  const mh=el('div','maphead',mapP); el('h4','',mh,'The run');
+  const mh=el('div','maphead',mapP); el('h3','',mh,'The run');
   el('span','',mh,'tap an inlet or a zone to change the plan');
   const sp2=el('span','spacer',mh); layerToggles(mh);
   coastMap(mapP,{route:{inletId:inl.id, zoneId:zone.id}});
@@ -367,7 +409,7 @@ function renderOffshore(){
     segs.forEach(([,s])=>{if(clsRank(s.cls)>clsRank(worst))worst=s.cls;avg+=s.avg;});
     avg=Math.round(avg/segs.length);
     const card=el('div','daycard',cards);
-    const h5=el('h5','',card);
+    const h5=el('h3','',card);
     el('span','',h5,dayLabel(dayStart)+' '+(dayStart.getMonth()+1)+'/'+dayStart.getDate());
     h5.appendChild(chipFor(worst));
     const lowConf=segs.some(([,s])=>s.sample.conf==='low');
@@ -383,19 +425,26 @@ function renderOffshore(){
 
   // 7-day offshore wave chart
   const p=el('div','panel',body);
-  const ph=el('h4','',p,'Offshore seas at the grounds — 7 days, model comparison');
+  const ph=el('h3','',p,'Offshore seas at the grounds — 7 days, model comparison');
   if(!zLive) simChip(ph).style.marginLeft='8px';
   el('p','psub',p,'Significant wave height at '+zone.name+(zLive?'.':' — simulated sample, source unreachable.'));
   const mt=zd.marine.t.filter(t=>t>=state.scored.start).slice(0,CONFIG.hoursPlanner);
   const i0=zd.marine.t.findIndex(t=>t>=state.scored.start);
+  const zHsG=zd.marine.gfs.hs.slice(i0,i0+CONFIG.hoursPlanner);
+  const zHsE=zd.marine.ecmwf.hs.slice(i0,i0+CONFIG.hoursPlanner);
   lineChart(p,{series:[
-    {name:'GFS-Wave',color:'var(--series-1)',t:mt,v:zd.marine.gfs.hs.slice(i0,i0+CONFIG.hoursPlanner)},
-    {name:'ECMWF-WAM',color:'var(--series-2)',t:mt,v:zd.marine.ecmwf.hs.slice(i0,i0+CONFIG.hoursPlanner)},
-  ],unit:'ft',height:190});
+    {name:'GFS-Wave',color:'var(--series-1)',t:mt,v:zHsG},
+    {name:'ECMWF-WAM',color:'var(--series-2)',t:mt,v:zHsE},
+  ],unit:'ft',height:190,
+  label:'Chart: offshore significant wave height in feet at '+zone.name+', GFS-Wave vs ECMWF-WAM, 7 days — values in the table below'});
   const lg=el('div','legend',p);
   [['GFS-Wave','var(--series-1)'],['ECMWF-WAM','var(--series-2)']].forEach(([nm,c])=>{
     const k=el('span','key',lg); const lk=el('span','lk',k); lk.style.background=c; el('span','',k,nm);
   });
+  // 3-hourly text twin of the chart above
+  const zRows=[];
+  for(let i=0;i<mt.length;i+=3) zRows.push([dayLabel(mt[i])+' '+hourLabel(mt[i]), ft(zHsG[i]), ft(zHsE[i])]);
+  chartTable(p,['Time','GFS-Wave ft','ECMWF-WAM ft'],zRows);
 }
 
 /* ---------- model agreement view ---------- */
@@ -420,41 +469,52 @@ function renderModels(){
   const agree= mad<0.6?'High':mad<1.2?'Moderate':'Low';
 
   const p0=el('div','panel',body);
-  el('h4','',p0,'Agreement over the next 7 days — '+inl.name);
+  el('h3','',p0,'Agreement over the next 7 days — '+inl.name);
   const fc=el('div','factorchips',p0);
   const c1=el('span','fchip',fc); c1.append('Mean model spread '); el('b','',c1,mad.toFixed(1)+' ft');
   const c2=el('span','fchip',fc); c2.append('Agreement '); el('b','',c2,agree);
   el('p','psub',p0,'Spread is the average absolute difference in significant wave height between GFS-Wave and ECMWF-WAM. Rule of thumb: under 0.6 ft, plan on the consensus; over 1.2 ft, wait for the next model cycle before committing to a long run.');
 
   const p1=el('div','panel',body);
-  el('h4','',p1,'Wave height — 7 days');
+  el('h3','',p1,'Wave height — 7 days');
   lineChart(p1,{series:[
     {name:'GFS-Wave',color:'var(--series-1)',t:mt,v:hsG},
     {name:'ECMWF-WAM',color:'var(--series-2)',t:mt,v:hsE},
-  ],unit:'ft',height:200});
+  ],unit:'ft',height:200,
+  label:'Chart: significant wave height in feet at '+inl.name+', GFS-Wave vs ECMWF-WAM, 7 days — values in the table below'});
   const lg=el('div','legend',p1);
   [['GFS-Wave','var(--series-1)'],['ECMWF-WAM','var(--series-2)']].forEach(([nm,c])=>{
     const k=el('span','key',lg); const lk=el('span','lk',k); lk.style.background=c; el('span','',k,nm);
   });
+  // 3-hourly text twin of the wave chart
+  const hRows=[];
+  for(let i=0;i<mt.length;i+=3) hRows.push([dayLabel(mt[i])+' '+hourLabel(mt[i]), ft(hsG[i]), ft(hsE[i])]);
+  chartTable(p1,['Time','GFS-Wave ft','ECMWF-WAM ft'],hRows);
 
   const wi0=d.wind.t.findIndex(t=>t>=state.scored.start);
   const wt=d.wind.t.slice(wi0,wi0+n);
   const p2=el('div','panel',body);
-  el('h4','',p2,'Wind — 7 days');
+  el('h3','',p2,'Wind — 7 days');
+  const wG=d.wind.gfs.spd.slice(wi0,wi0+n), wE=d.wind.ecmwf.spd.slice(wi0,wi0+n);
   lineChart(p2,{series:[
-    {name:'GFS',color:'var(--series-1)',t:wt,v:d.wind.gfs.spd.slice(wi0,wi0+n)},
-    {name:'ECMWF',color:'var(--series-2)',t:wt,v:d.wind.ecmwf.spd.slice(wi0,wi0+n)},
-  ],unit:'kn',height:180});
+    {name:'GFS',color:'var(--series-1)',t:wt,v:wG},
+    {name:'ECMWF',color:'var(--series-2)',t:wt,v:wE},
+  ],unit:'kn',height:180,
+  label:'Chart: 10 m wind speed in knots at '+inl.name+', GFS vs ECMWF, 7 days — values in the table below'});
   const lg2=el('div','legend',p2);
   [['GFS','var(--series-1)'],['ECMWF','var(--series-2)']].forEach(([nm,c])=>{
     const k=el('span','key',lg2); const lk=el('span','lk',k); lk.style.background=c; el('span','',k,nm);
   });
+  // 3-hourly text twin of the wind chart
+  const wRows=[];
+  for(let i=0;i<wt.length;i+=3) wRows.push([dayLabel(wt[i])+' '+hourLabel(wt[i]), ft(wG[i]), ft(wE[i])]);
+  chartTable(p2,['Time','GFS kn','ECMWF kn'],wRows);
 }
 
 /* ---------- method ---------- */
 function renderMethod(){
   const b=$('#methodBody'); if(b.childNodes.length) return;
-  const add=(h,t)=>{if(h)el('h4','',b,h);el('p','',b,t);};
+  const add=(h,t)=>{if(h)el('h3','',b,h);el('p','',b,t);};
   add(null,'InletCast is a prototype by Ghosttree Technical Solutions, LLC — a working demonstration of inlet-scale condition guidance for the Southeast NC coast, built by a forecaster who runs these inlets.');
   add('Data','Wave guidance comes from two independent operational wave models (NOAA GFS-Wave and ECMWF WAM) at a nearshore point off each inlet, via the Open-Meteo API (weather data by Open-Meteo.com, CC BY 4.0 — link in the footer). Winds are GFS and ECMWF 10 m fields. Tides are NOAA CO-OPS harmonic predictions from the nearest reference station. When live sources are unreachable, the app runs on clearly-labeled synthetic demo data so you can still explore the interface.');
   add('The score','Each hour gets a 0–100 score built from four transparent penalties: sea state (height and short-period steepness), wind (speed, gusts, onshore component), a bar-breaking term — a shoaled-height proxy that grows with swell period and each inlet’s shoaling factor, because long-period energy is what shoals, jacks, and breaks on an ebb delta — and the tide term: ebb strength multiplied by how directly the swell opposes the channel, weighted by each inlet’s shoaling behavior. Swell direction and period come from the models’ swell partition when available, so wind chop cannot hide an opposed ground swell. The ebb strength is deliberately widened about ±90 minutes, since the tide stations are timing proxies. On top of the score, hard overrides force Hazardous whenever the raw sea height can break a shoal bar — regardless of boat class, which scales comfort, never a breaking bar — and a strong ebb against a long-period swell over a shoal bar forces at least Rough. Nothing is a black box: the "why" panel shows every penalty.');
@@ -488,12 +548,12 @@ function updateModeBadge(){
   p.textContent='';
   const fails=failedSources();
   if(fails.length){
-    el('h5','',p,'Simulated sources — unreachable');
+    el('div','popttl',p,'Simulated sources — unreachable');
     const ul=el('ul','',p);
     fails.forEach(f=>el('li','sim',ul,f));
     el('p','',p,'Everything not listed is live. Verify against official NWS forecasts.');
   } else {
-    el('h5','',p,'Data sources');
+    el('div','popttl',p,'Data sources');
     el('p','',p,state.mode==='live'?'All sources live.':'Source status unavailable.');
   }
   // refresh is always one tap away via the badge dropdown

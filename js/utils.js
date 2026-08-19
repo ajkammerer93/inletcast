@@ -19,6 +19,8 @@ function ymd(d){return d.getFullYear()+''+pad2(d.getMonth()+1)+pad2(d.getDate())
 
 // touch-first environment? drives tap-to-pin defaults (table visible, two-tap markers)
 function isCoarse(){ try{ return !!(window.matchMedia&&window.matchMedia('(pointer: coarse)').matches); }catch(e){ return false; } }
+// vestibular safety: decorative animation (wind particles) is skipped when this matches
+function prefersReduced(){ try{ return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches); }catch(e){ return false; } }
 
 const $=(s,el)=>(el||document).querySelector(s);
 const $$=(s,el)=>[...(el||document).querySelectorAll(s)];

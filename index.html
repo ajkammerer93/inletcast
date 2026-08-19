@@ -23,7 +23,7 @@ try{var t=localStorage.getItem('inletcast_theme');if(t==='dark'||t==='light')doc
 <body>
 <header class="app">
   <div class="brandrow">
-    <span class="logo">Inlet<span class="cast">Cast</span></span>
+    <h1 class="logo">Inlet<span class="cast">Cast</span></h1>
     <span class="proto-tag">Prototype</span>
     <button type="button" class="mode-badge" id="modeBadge" aria-live="polite" aria-expanded="false" title="Data source status — activate for details"><span class="dot"></span><span id="modeText">Loading…</span></button>
     <div class="mode-sources" id="modeSources" hidden></div>
@@ -46,11 +46,11 @@ try{var t=localStorage.getItem('inletcast_theme');if(t==='dark'||t==='light')doc
       <option value="Crystal Coast">Crystal Coast</option>
     </select>
   </div>
-  <nav class="tabs" role="tablist">
-    <button data-view="inlets" class="active">Inlets</button>
-    <button data-view="offshore">Offshore planner</button>
-    <button data-view="models">Model agreement</button>
-    <button data-view="method">Method</button>
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button id="tab-inlets" data-view="inlets" class="active" role="tab" aria-selected="true" aria-controls="view-inlets">Inlets</button>
+    <button id="tab-offshore" data-view="offshore" role="tab" aria-selected="false" aria-controls="view-offshore" tabindex="-1">Offshore planner</button>
+    <button id="tab-models" data-view="models" role="tab" aria-selected="false" aria-controls="view-models" tabindex="-1">Model agreement</button>
+    <button id="tab-method" data-view="method" role="tab" aria-selected="false" aria-controls="view-method" tabindex="-1">Method</button>
   </nav>
 </header>
 
@@ -60,7 +60,7 @@ try{var t=localStorage.getItem('inletcast_theme');if(t==='dark'||t==='light')doc
     <button id="bannerClose" aria-label="Dismiss">✕</button>
   </div>
 
-  <section class="view active" id="view-inlets">
+  <section class="view active" id="view-inlets" role="tabpanel" aria-labelledby="tab-inlets">
     <h2 class="viewtitle">Inlet condition windows — next 72 hours</h2>
     <p class="viewsub" id="inletsSub">Crossing-condition outlook for Southeast NC inlets, scored from wave, wind, and tide-phase guidance.</p>
     <p class="viewsub boatnote" id="boatNote"></p>
@@ -70,7 +70,7 @@ try{var t=localStorage.getItem('inletcast_theme');if(t==='dark'||t==='light')doc
 
   <section class="view" id="view-detail"></section>
 
-  <section class="view" id="view-offshore">
+  <section class="view" id="view-offshore" role="tabpanel" aria-labelledby="tab-offshore">
     <h2 class="viewtitle">Offshore trip planner — next 7 days</h2>
     <p class="viewsub">Day scores for the run out, hours on the grounds, and the run home. Pick your departure inlet and destination.</p>
     <div class="filters">
@@ -82,7 +82,7 @@ try{var t=localStorage.getItem('inletcast_theme');if(t==='dark'||t==='light')doc
     <div id="offshoreBody"></div>
   </section>
 
-  <section class="view" id="view-models">
+  <section class="view" id="view-models" role="tabpanel" aria-labelledby="tab-models">
     <h2 class="viewtitle">Do the models agree?</h2>
     <p class="viewsub">GFS-Wave vs ECMWF-WAM at each inlet's sea buoy point. When they diverge, treat every forecast — ours included — with more caution. We show you the spread instead of hiding it.</p>
     <div class="filters">
@@ -92,7 +92,7 @@ try{var t=localStorage.getItem('inletcast_theme');if(t==='dark'||t==='light')doc
     <div id="modelsBody"></div>
   </section>
 
-  <section class="view" id="view-method">
+  <section class="view" id="view-method" role="tabpanel" aria-labelledby="tab-method">
     <h2 class="viewtitle">How InletCast works</h2>
     <div class="method" id="methodBody"></div>
   </section>
@@ -102,25 +102,25 @@ try{var t=localStorage.getItem('inletcast_theme');if(t==='dark'||t==='light')doc
     <h2 class="viewtitle">Terms of Use &amp; Privacy</h2>
     <div class="method">
       <p>Plain language, because it matters here: InletCast is condition guidance, not a go/no-go authority. By using this site you agree to the terms below.</p>
-      <h4>As-is, no warranty</h4>
+      <h3>As-is, no warranty</h3>
       <p>InletCast is provided &ldquo;AS IS&rdquo; and &ldquo;as available,&rdquo; without warranty of any kind, express or implied — including any warranty of accuracy, reliability, availability, merchantability, or fitness for a particular purpose. Forecasts are model output; they can be wrong, stale, or missing at exactly the moment you check them.</p>
-      <h4>Assumption of risk</h4>
+      <h3>Assumption of risk</h3>
       <p>Crossing an ocean inlet is inherently dangerous. Bars shoal, channels move, and conditions change faster than any model updates. By using InletCast you expressly assume all risk of injury, death, or loss arising from inlet crossings and offshore passages, and you accept that the decision to cross — and its consequences — are yours alone.</p>
-      <h4>No reliance</h4>
+      <h3>No reliance</h3>
       <p>Do not rely on InletCast as your source of marine weather information. Verify everything against official NWS marine forecasts and your own observation of the water before you commit to a crossing.</p>
-      <h4>Limitation of liability</h4>
+      <h3>Limitation of liability</h3>
       <p>To the maximum extent permitted by law, Ghosttree Technical Solutions, LLC and its members, officers, and contributors are not liable for any damages of any kind — direct, indirect, incidental, consequential, special, or otherwise, including personal injury, death, or property loss — arising from your use of, or inability to use, InletCast. Total aggregate liability is zero dollars ($0).</p>
-      <h4>Governing law</h4>
+      <h3>Governing law</h3>
       <p>These terms are governed by the laws of the State of North Carolina, without regard to conflict-of-law rules.</p>
-      <h4>Privacy</h4>
+      <h3>Privacy</h3>
       <p>No cookies, no analytics, no tracking. A single localStorage flag remembers that you dismissed the notice banner; it never leaves your device. Forecast data is fetched by your browser directly from Open-Meteo and NOAA, which see your IP address like any web request. Beta-list emails are used only for product updates and are never shared.</p>
-      <h4>Not affiliated</h4>
+      <h3>Not affiliated</h3>
       <p>InletCast is not affiliated with, operated by, or endorsed by NOAA or the National Weather Service. Operated by Ghosttree Technical Solutions, LLC, Hampstead, NC.</p>
     </div>
   </section>
 </main>
 
-<div class="tooltip" id="tooltip" role="status"></div>
+<div class="tooltip" id="tooltip"></div>
 <footer class="disc">Guidance only — never a statement that a crossing is safe. Verify against official NWS marine forecasts &amp; local observations. InletCast is not affiliated with, operated by, or endorsed by NOAA or the National Weather Service. Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0) · <a href="#view-terms">Terms of Use &amp; Privacy</a> · © 2026 Ghosttree Technical Solutions, LLC · InletCast prototype <span id="appVer"></span></footer>
 <script src="js/config.js"></script>
 <script src="js/utils.js"></script>

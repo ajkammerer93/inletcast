@@ -20,6 +20,15 @@ document.addEventListener('pointerdown',ev=>{
   const cp=document.querySelector('.clspop');
   if(cp&&cp.style.display==='block'&&!cp.contains(ev.target)) cp.style.display='none';
 });
+// Escape dismisses every transient readout: the tooltip (pinned or not), pinned
+// map cursor readouts, and the status-class popover
+document.addEventListener('keydown',ev=>{
+  if(ev.key!=='Escape') return;
+  unpinTip();
+  $$('.mapreadout').forEach(r=>{ if(r.dataset.pin==='1'){ r.dataset.pin=''; } r.style.display='none'; });
+  const cp=document.querySelector('.clspop');
+  if(cp) cp.style.display='none';
+});
 
 function showTip(x,y,title,rows){
   tooltip.textContent='';
@@ -41,11 +50,13 @@ function hideTip(force){ if(tipPinned&&!force) return; tooltip.style.display='no
 
 /* ---------- generic multi-series line chart (one axis) ---------- */
 function lineChart(parent, opt){
-  // opt: {series:[{name,color,t:[],v:[]}], unit, height, yMin, area, dayTicks, thresholds:[{y,label}]}
+  // opt: {series:[{name,color,t:[],v:[]}], unit, height, yMin, area, label, dayTicks, thresholds:[{y,label}]}
   const H=opt.height||180, padL=34, padR=14, padT=12, padB=22;
   const wrap=el('div','chart',parent);
   const W=Math.max(320, wrap.clientWidth||parent.clientWidth||640);
-  const svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',height:H,role:'img'},wrap);
+  // every chart names itself for screen readers; callers point the label at the text twin
+  const label=opt.label||('Chart: '+opt.series.map(s=>s.name).join(' vs ')+(opt.unit?' in '+opt.unit:''));
+  const svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',height:H,role:'img','aria-label':label},wrap);
   const plotW=W-padL-padR, plotH=H-padT-padB;
   const t0=opt.series[0].t[0], t1=opt.series[0].t[opt.series[0].t.length-1];
   const xOf=t=>padL+plotW*(t-t0)/(t1-t0);
@@ -129,7 +140,7 @@ function statusStrip(parent, hours, opts){
   const compact=opts&&opts.compact;
   const H=compact?34:46, padB=compact?12:16, W=Math.max(300,parent.clientWidth||640);
   const wrap=el('div','strip',parent);
-  const svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',height:H},wrap);
+  const svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',height:H,role:'img','aria-label':'Condition timeline'},wrap);
   if(!hours.length) return wrap;
   const t0=hours[0].t, t1=hours[hours.length-1].t;
   const xOf=t=>W*((t-t0)/(t1-t0||1));
@@ -140,16 +151,26 @@ function statusStrip(parent, hours, opts){
     else {if(cur)runs.push(cur); cur={cls:h.cls,from:h.t,to:h.t,hrs:[h]};}
   }
   if(cur)runs.push(cur);
+  // text summary of the runs — the strip's screen-reader equivalent
+  svg.setAttribute('aria-label','Conditions: '+runs.map(r=>CLS_META[r.cls].label+' '+timeRangeLabel(r.from,new Date(r.to.getTime()+36e5))).join(', '));
   const barH=H-padB;
   runs.forEach((r,i)=>{
     const x=xOf(r.from), x2=(i===runs.length-1)?W:xOf(new Date(r.to.getTime()+36e5));
     const w=Math.max(1,x2-x-2); // 2px surface gap between runs
     const meta=CLS_META[r.cls];
-    const rect=svgEl('rect',{x:x+1,y:0,width:w,height:barH,rx:4,fill:meta.color},svg);
-    if(!compact&&w>58){
+    const hasLabel=!compact&&w>58;
+    // text-bearing good runs use the darker green so the white label reaches 4.5:1
+    const rect=svgEl('rect',{x:x+1,y:0,width:w,height:barH,rx:4,
+      fill:(hasLabel&&r.cls==='good')?'var(--st-good-deep)':meta.color},svg);
+    if(hasLabel){
       const tx=svgEl('text',{x:x+1+w/2,y:barH/2+3.5,'text-anchor':'middle','font-size':10,'font-weight':700,
-        fill:(r.cls==='warn'||r.cls==='serious')?'#3a2a00':'#fff'},svg);
+        fill:(r.cls==='warn'||r.cls==='serious')?'#3a2a00':'#fff','pointer-events':'none'},svg);
       tx.textContent=meta.ic+' '+meta.label;
+    }else if(r.hrs.length>=3){
+      // never color alone: runs of 3 h and up carry the class glyph even in compact strips
+      const gx=svgEl('text',{x:x+1+w/2,y:barH/2+3,'text-anchor':'middle','font-size':9,'font-weight':700,
+        fill:(r.cls==='warn'||r.cls==='serious')?'#3a2a00':'#fff','pointer-events':'none'},svg);
+      gx.textContent=meta.ic;
     }
     const showRun=(ev,pin)=>{
       if(tipPinned&&!pin) return;
@@ -188,9 +209,9 @@ function stripLegend(parent){
 }
 
 /* ---------- tide chart with ebb shading ---------- */
-function tideChart(parent, tides, nHours){
+function tideChart(parent, tides, nHours, label){
   const start=state.scored.start;
   const sub=tides.filter(p=>p.t>=start&&p.t<=new Date(start.getTime()+nHours*36e5));
-  const wrap=lineChart(parent,{series:[{name:'Predicted tide',color:'var(--seq-450)',t:sub.map(p=>p.t),v:sub.map(p=>p.v)}],unit:'ft',height:150,area:true,yMin:0});
+  const wrap=lineChart(parent,{series:[{name:'Predicted tide',color:'var(--seq-450)',t:sub.map(p=>p.t),v:sub.map(p=>p.v)}],unit:'ft',height:150,area:true,yMin:0,label});
   return wrap;
 }
