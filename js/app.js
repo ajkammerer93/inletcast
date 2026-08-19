@@ -35,7 +35,7 @@ async function refreshData(){
   state.refreshing=true;
   const t=$('#modeText'); if(t) t.textContent='Refreshing…';
   try{
-    await loadData(onSourceSettled);
+    await loadData(onSourceSettled,true); // user asked for a refresh — bypass the fresh cache
     updateModeBadge();
     renderAll();
   } finally { state.refreshing=false; }
@@ -73,7 +73,7 @@ async function boot(){
     const next=isDark?'light':'dark';
     r.setAttribute('data-theme',next);
     try{ localStorage.setItem(THEME_KEY,next); }catch(e){}
-    renderAll(); // re-render for chart chrome colors baked into SVG attrs via CSS vars (vars resolve live, but re-render keeps layout fresh)
+    renderActiveView(); // restyle only — scores are theme-independent, so no scoreAll here
   });
   // the banner doubles as the Terms acknowledgment: dismissal is remembered per device
   const ACK_KEY='inletcast_ack_v1';
@@ -100,6 +100,10 @@ async function boot(){
   document.addEventListener('visibilitychange',maybeRefresh);
   window.addEventListener('focus',maybeRefresh);
   setInterval(()=>{ if(state.fetchedAt&&!state.refreshing) updateModeBadge(); },60e3);
+  // offline app shell: precached by the service worker (guarded — jsdom and older browsers lack it)
+  if('serviceWorker' in navigator){
+    try{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }catch(e){}
+  }
 
   // first paint: skeleton cards from CONFIG, before any fetch resolves
   scoreAll();

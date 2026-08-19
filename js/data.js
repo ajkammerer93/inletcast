@@ -12,16 +12,51 @@ async function fetchJSON(url, timeoutMs=9000){
   } finally { clearTimeout(to); }
 }
 
+/* ---------------- response cache ----------------
+   Raw JSON per source, keyed by URL in localStorage. Fresh cache is served without
+   a network hit (Open-Meteo counts multi-location requests per location — the grid
+   pair alone weighs ~160 call-units per load); expired cache is the failure
+   fallback, because this morning's real forecast labeled "cached" beats synthetic
+   data for a safety-adjacent product. Synthetic remains only for first-ever visits.
+   All storage access is guarded — private mode throws on setItem. */
+const CACHE_NS='inletcast_api_v1:';
+const CACHE_TTL={point:45*60e3, grid:45*60e3, tides:12*3600e3, mur:6*3600e3};
+let cacheBypass=false; // a user-initiated refresh must hit the network, not the fresh cache
+function cacheRead(url){
+  try{
+    const rec=JSON.parse(localStorage.getItem(CACHE_NS+url));
+    return (rec&&typeof rec.t==='number'&&'j' in rec)?rec:null;
+  }catch(e){ return null; }
+}
+function cacheWrite(url,json){
+  try{ localStorage.setItem(CACHE_NS+url,JSON.stringify({t:Date.now(),j:json})); }catch(e){}
+}
+/* fetch-through-cache → {j, src:'live'|'cached', at}. 'cached' means the network
+   failed and an expired cached response stood in; fresh cache counts as live.
+   Throws only when there is neither network nor cache. */
+async function fetchJSONCached(url, ttlMs, timeoutMs){
+  const rec=cacheRead(url);
+  if(rec&&!cacheBypass&&Date.now()-rec.t<ttlMs) return {j:rec.j, src:'live', at:rec.t};
+  try{
+    const j=await fetchJSON(url,timeoutMs);
+    cacheWrite(url,j);
+    return {j, src:'live', at:Date.now()};
+  }catch(e){
+    if(rec) return {j:rec.j, src:'cached', at:rec.t};
+    throw e;
+  }
+}
+
 // Marine API with two wave models -> suffixed keys. We normalize to {t[], gfs:{hs,tp,dir}, ecmwf:{hs,tp,dir}}
 async function fetchMarine(lat,lon){
   const url='https://marine-api.open-meteo.com/v1/marine?latitude='+lat+'&longitude='+lon
     +'&hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction'
     +'&models=gfs_wave025,ecmwf_wam025&length_unit=imperial&timezone=America%2FNew_York&forecast_days=8';
-  const j=await fetchJSON(url);
-  const h=j.hourly||{};
+  const r=await fetchJSONCached(url,CACHE_TTL.point);
+  const h=r.j.hourly||{};
   const pick=(base,model)=>h[base+'_'+model]||h[base]||[];
-  return {
-    t:(h.time||[]).map(s=>new Date(s)),
+  return { src:r.src, at:r.at,
+    t:(h.time||[]).map(nyParse),
     gfs:{ hs:pick('wave_height','gfs_wave025'), tp:pick('wave_period','gfs_wave025'), dir:pick('wave_direction','gfs_wave025'),
           shs:pick('swell_wave_height','gfs_wave025'), stp:pick('swell_wave_period','gfs_wave025'), sdir:pick('swell_wave_direction','gfs_wave025') },
     ecmwf:{ hs:pick('wave_height','ecmwf_wam025'), tp:pick('wave_period','ecmwf_wam025'), dir:pick('wave_direction','ecmwf_wam025'),
@@ -32,11 +67,11 @@ async function fetchWind(lat,lon){
   const url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon
     +'&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m'
     +'&models=gfs_seamless,ecmwf_ifs025&wind_speed_unit=kn&timezone=America%2FNew_York&forecast_days=8';
-  const j=await fetchJSON(url);
-  const h=j.hourly||{};
+  const r=await fetchJSONCached(url,CACHE_TTL.point);
+  const h=r.j.hourly||{};
   const pick=(base,model)=>h[base+'_'+model]||h[base]||[];
-  return {
-    t:(h.time||[]).map(s=>new Date(s)),
+  return { src:r.src, at:r.at,
+    t:(h.time||[]).map(nyParse),
     gfs:{ spd:pick('wind_speed_10m','gfs_seamless'), dir:pick('wind_direction_10m','gfs_seamless'), gst:pick('wind_gusts_10m','gfs_seamless') },
     ecmwf:{ spd:pick('wind_speed_10m','ecmwf_ifs025'), dir:pick('wind_direction_10m','ecmwf_ifs025'), gst:pick('wind_gusts_10m','ecmwf_ifs025') },
   };
@@ -46,9 +81,9 @@ async function fetchTides(sta){
   const url='https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=inletcast_prototype'
     +'&begin_date='+ymd(now)+'&end_date='+ymd(end)+'&datum=MLLW&station='+sta
     +'&time_zone=lst_ldt&units=english&interval=h&format=json';
-  const j=await fetchJSON(url);
-  if(!j.predictions) throw new Error('no predictions');
-  return j.predictions.map(p=>({t:new Date(p.t.replace(' ','T')), v:parseFloat(p.v)}));
+  const r=await fetchJSONCached(url,CACHE_TTL.tides);
+  if(!r.j.predictions) throw new Error('no predictions');
+  return { src:r.src, at:r.at, pts:r.j.predictions.map(p=>({t:nyParse(p.t), v:parseFloat(p.v)})) };
 }
 function makeDemoSST(){
   // demo: logistic front along a meandering reference line from SW to NE
@@ -94,26 +129,29 @@ function buildGrid(){
 function emptyGrid2D(ny,nx){return Array.from({length:ny},()=>Array(nx).fill(null));}
 async function fetchGridFields(g){
   const latQ=g.ocean.map(p=>p.lat.toFixed(3)).join(','), lonQ=g.ocean.map(p=>p.lon.toFixed(3)).join(',');
-  const [mj,wj]=await Promise.all([
-    fetchJSON('https://marine-api.open-meteo.com/v1/marine?latitude='+latQ+'&longitude='+lonQ
-      +'&hourly=sea_surface_temperature&forecast_days=1&timezone=America%2FNew_York',14000),
-    fetchJSON('https://api.open-meteo.com/v1/forecast?latitude='+latQ+'&longitude='+lonQ
-      +'&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=kn&forecast_days=1&timezone=America%2FNew_York',14000),
+  const [mr,wr]=await Promise.all([
+    fetchJSONCached('https://marine-api.open-meteo.com/v1/marine?latitude='+latQ+'&longitude='+lonQ
+      +'&hourly=sea_surface_temperature&forecast_days=1&timezone=America%2FNew_York',CACHE_TTL.grid,14000),
+    fetchJSONCached('https://api.open-meteo.com/v1/forecast?latitude='+latQ+'&longitude='+lonQ
+      +'&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=kn&forecast_days=1&timezone=America%2FNew_York',CACHE_TTL.grid,14000),
   ]);
+  const mj=mr.j, wj=wr.j;
   const mArr=Array.isArray(mj)?mj:[mj], wArr=Array.isArray(wj)?wj:[wj];
   if(mArr.length!==g.ocean.length||wArr.length!==g.ocean.length) throw new Error('grid count mismatch');
-  const hr=new Date().getHours();
+  const nowMs=Date.now();
   const sst=emptyGrid2D(g.lats.length,g.lons.length), wspd=emptyGrid2D(g.lats.length,g.lons.length), wdir=emptyGrid2D(g.lats.length,g.lons.length);
   g.ocean.forEach((p,k)=>{
     const mh=(mArr[k].hourly||{}), wh=(wArr[k].hourly||{});
-    const idxM=Math.min(hr,(mh.time||[]).length-1), idxW=Math.min(hr,(wh.time||[]).length-1);
+    // the current hour comes from each response's own time axis, not the viewer's clock
+    const idxM=hourIndexFor(mh.time,nowMs), idxW=hourIndexFor(wh.time,nowMs);
     const s=(mh.sea_surface_temperature||[])[idxM];
     sst[p.i][p.j]=(s==null||Number.isNaN(s))?null:s;
     const ws=(wh.wind_speed_10m||[])[idxW], wd=(wh.wind_direction_10m||[])[idxW];
     wspd[p.i][p.j]=(ws==null||Number.isNaN(ws))?null:ws;
     wdir[p.i][p.j]=(wd==null||Number.isNaN(wd))?null:wd;
   });
-  return {sst,wspd,wdir};
+  const src=(mr.src==='cached'||wr.src==='cached')?'cached':'live';
+  return {sst,wspd,wdir,src,at:Math.min(mr.at,wr.at)};
 }
 /* MUR 1-km satellite-blended SST analysis via NOAA CoastWatch ERDDAP (CORS-open).
    Preferred SST source — resolves real Gulf Stream structure that smoothed
@@ -124,7 +162,8 @@ async function fetchMURGrid(){
     +'%5B(last)%5D'
     +'%5B('+GRID.latMin+'):'+stride+':('+GRID.latMax+')%5D'
     +'%5B('+GRID.lonMin+'):'+stride+':('+GRID.lonMax+')%5D';
-  const j=await fetchJSON(url,15000);
+  const r=await fetchJSONCached(url,CACHE_TTL.mur,15000);
+  const j=r.j;
   const t=j.table; if(!t||!t.rows||!t.rows.length) throw new Error('no rows');
   const ci={}; t.columnNames.forEach((c,k)=>ci[c]=k);
   const latSet=new Set(), lonSet=new Set();
@@ -140,7 +179,7 @@ async function fetchMURGrid(){
     sst[li[r[ci.latitude]]][lj[r[ci.longitude]]]=v; n++;
   });
   if(n<20) throw new Error('too few valid cells');
-  return {lats,lons,sst,time:t.rows[0][ci.time]||null,source:'mur'};
+  return {lats,lons,sst,time:t.rows[0][ci.time]||null,source:'mur',src:r.src,at:r.at};
 }
 
 function demoGridFields(g){
@@ -163,7 +202,7 @@ function synthPoint(seedStr, start, nHours){
   const wg={spd:[],dir:[],gst:[]}, we={spd:[],dir:[],gst:[]};
   for(let i=0;i<nHours;i++){
     const d=new Date(start.getTime()+i*36e5); t.push(d);
-    const hod=d.getHours();
+    const hod=nyHour(d);
     // synoptic wind: builds ahead of the "front", veers after
     const front=Math.exp(-Math.pow((i-stormT)/16,2));
     const synW=9+6*Math.sin(i/34+p1)+13*front;
@@ -204,17 +243,25 @@ function synthTide(sta, start, nHours){
 }
 
 /* ---------------- load ---------------- */
-/* Incremental: each source writes into state.data as soon as it settles (live or
-   synthetic fallback) and fires onSettle so the UI can hydrate card-by-card instead
-   of blocking on the slowest of ~24 requests. The final allSettled still gates the
-   mode badge and the fetched-at timestamp. */
-async function loadData(onSettle){
-  const start=new Date(); start.setMinutes(0,0,0);
+/* Incremental: each source writes into state.data as soon as it settles (live,
+   expired-cache, or synthetic fallback) and fires onSettle so the UI can hydrate
+   card-by-card instead of blocking on the slowest of ~24 requests. The final
+   allSettled still gates the mode badge and the fetched-at timestamp.
+   Each record carries src:'live'|'cached' (real data; 'cached' = expired cache used
+   after a network failure) alongside the existing live flag (false = synthetic).
+   force=true (user-tapped refresh) bypasses the fresh-cache short-circuit. */
+async function loadData(onSettle, force){
+  const start=startOfHour();
   const n=CONFIG.hoursPlanner+24;
   if(!state.data) state.data={inlets:{}, zones:{}, tides:{}};
   const data=state.data;
-  let liveOK=0, liveFail=0;
+  let liveOK=0, liveFail=0, cachedUsed=0, cachedOldest=null;
   const settled=()=>{ if(onSettle) try{ onSettle(); }catch(e){} };
+  const tally=(src,at)=>{
+    if(src==='cached'){ cachedUsed++; if(cachedOldest==null||at<cachedOldest) cachedOldest=at; }
+    else liveOK++;
+  };
+  cacheBypass=!!force;
 
   const jobs=[];
   for(const inl of CONFIG.inlets){
@@ -222,8 +269,10 @@ async function loadData(onSettle){
       try{
         const [m,w]=await Promise.all([fetchMarine(inl.wLat,inl.wLon), fetchWind(inl.wLat,inl.wLon)]);
         if(!m.t.length||!w.t.length) throw new Error('empty');
-        data.inlets[inl.id]={marine:m, wind:w, live:true}; liveOK++;
-      }catch(e){ data.inlets[inl.id]={...synthPoint('inlet'+inl.id,start,n), live:false}; liveFail++; }
+        const src=(m.src==='cached'||w.src==='cached')?'cached':'live';
+        data.inlets[inl.id]={marine:m, wind:w, live:true, src, cachedAt:Math.min(m.at,w.at)};
+        tally(src,Math.min(m.at,w.at));
+      }catch(e){ data.inlets[inl.id]={...synthPoint('inlet'+inl.id,start,n), live:false, src:'synth'}; liveFail++; }
       settled();
     })());
   }
@@ -232,13 +281,15 @@ async function loadData(onSettle){
       try{
         const [m,w]=await Promise.all([fetchMarine(z.lat,z.lon), fetchWind(z.lat,z.lon)]);
         if(!m.t.length||!w.t.length) throw new Error('empty');
-        data.zones[z.id]={marine:m, wind:w, live:true}; liveOK++;
-      }catch(e){ data.zones[z.id]={...synthPoint('zone'+z.id,start,n), live:false}; liveFail++; }
+        const src=(m.src==='cached'||w.src==='cached')?'cached':'live';
+        data.zones[z.id]={marine:m, wind:w, live:true, src, cachedAt:Math.min(m.at,w.at)};
+        tally(src,Math.min(m.at,w.at));
+      }catch(e){ data.zones[z.id]={...synthPoint('zone'+z.id,start,n), live:false, src:'synth'}; liveFail++; }
       settled();
     })());
   }
   jobs.push((async()=>{
-    try{ data.murGrid=await fetchMURGrid(); liveOK++; }
+    try{ data.murGrid=await fetchMURGrid(); tally(data.murGrid.src,data.murGrid.at); }
     catch(e){ data.murGrid=null; } // silent enhancement — NWP grid is the fallback
     settled();
   })());
@@ -247,8 +298,9 @@ async function loadData(onSettle){
     try{
       const f=await fetchGridFields(grid);
       if(!f.sst.flat().some(v=>v!=null)) throw new Error('all null');
-      data.grid={...grid, ...f, live:true}; liveOK++;
-    }catch(e){ data.grid={...grid, ...demoGridFields(grid), live:false}; liveFail++; }
+      data.grid={...grid, ...f, live:true, cachedAt:f.at};
+      tally(f.src,f.at);
+    }catch(e){ data.grid={...grid, ...demoGridFields(grid), live:false, src:'synth'}; liveFail++; }
     settled();
   })());
   const stations=[...new Set(CONFIG.inlets.map(i=>i.tideSta))];
@@ -256,13 +308,17 @@ async function loadData(onSettle){
     jobs.push((async()=>{
       try{
         const t=await fetchTides(sta);
-        if(!t.length) throw new Error('empty');
-        data.tides[sta]={pts:t, live:true}; liveOK++;
-      }catch(e){ data.tides[sta]={pts:synthTide(sta,start,n), live:false}; liveFail++; }
+        if(!t.pts.length) throw new Error('empty');
+        data.tides[sta]={pts:t.pts, live:true, src:t.src, cachedAt:t.at};
+        tally(t.src,t.at);
+      }catch(e){ data.tides[sta]={pts:synthTide(sta,start,n), live:false, src:'synth'}; liveFail++; }
       settled();
     })());
   }
   await Promise.allSettled(jobs);
-  state.mode = liveFail===0 ? 'live' : (liveOK===0 ? 'demo' : 'mixed');
+  cacheBypass=false;
+  state.mode = liveFail>0 ? (liveOK+cachedUsed===0 ? 'demo' : 'mixed')
+             : cachedUsed>0 ? 'cached' : 'live';
+  state.cachedOldest=cachedOldest;
   state.fetchedAt=new Date();
 }

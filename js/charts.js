@@ -73,9 +73,10 @@ function lineChart(parent, opt){
     const tx=svgEl('text',{x:padL-6,y:yOf(v)+3.5,'text-anchor':'end','font-size':10,fill:'var(--ink-3)'},svg);
     tx.textContent=String(Math.round(v)); tx.style.fontVariantNumeric='tabular-nums';
   }
-  // x day ticks
-  const dayStart=new Date(t0); dayStart.setHours(0,0,0,0);
-  for(let d=new Date(dayStart);d<=t1;d.setDate(d.getDate()+1)){
+  // x day ticks — NY midnights, so the day boundaries match the labels everywhere
+  for(let k=0;;k++){
+    const d=nyStartOfDay(t0,k);
+    if(d>t1) break;
     if(d<t0) continue;
     const x=xOf(d);
     svgEl('line',{x1:x,x2:x,y1:padT,y2:H-padB,stroke:'var(--grid)','stroke-width':1},svg);
@@ -188,10 +189,11 @@ function statusStrip(parent, hours, opts){
     rect.addEventListener('click',ev=>ev.stopPropagation());    // a strip tap reads values; it never opens the card
     rect.addEventListener('pointerleave',()=>hideTip());
   });
-  // day labels
-  const dayStart=new Date(t0); dayStart.setHours(0,0,0,0);
-  for(let d=new Date(dayStart);d<=t1;d.setDate(d.getDate()+1)){
-    if(d<t0)continue;
+  // day labels — NY midnights
+  for(let k=0;;k++){
+    const d=nyStartOfDay(t0,k);
+    if(d>t1) break;
+    if(d<t0) continue;
     const tx=svgEl('text',{x:xOf(d)+2,y:H-2,'font-size':9.5,fill:'var(--ink-3)'},svg);
     tx.textContent=dayLabel(d);
     svgEl('line',{x1:xOf(d),x2:xOf(d),y1:0,y2:barH,stroke:'var(--surface-1)','stroke-width':2},svg);

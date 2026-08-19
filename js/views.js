@@ -28,6 +28,9 @@ function setView(v){
     b.tabIndex=on?0:-1;
   });
   renderActiveView();           // after the class flip, so charts measure a visible container
+  // hidden views keep their DOM until the next activation — stop their wind-particle
+  // loops so a display:none map never burns battery (re-activation re-renders anyway)
+  $$('.view:not(.active) canvas').forEach(c=>{ c.dataset.stop='1'; });
   document.title=titleFor(v);
   const h=hashFor(v);
   // don't force '#/inlets' onto a clean URL — keeps the first back press from being a no-op
@@ -107,6 +110,13 @@ function simChip(parent){
   const c=el('span','chip sim',parent,'⚠ SIMULATED — source unreachable');
   return c;
 }
+// expired-cache marker: real data, but saved earlier — clearly better than simulated,
+// clearly not live (rendered wherever a src:'cached' source feeds the UI)
+function cachedChip(parent, atMs){
+  const c=el('span','chip cached',parent,'⟳ CACHED '+(atMs?nyTimeLabel(new Date(atMs)):''));
+  c.title='Source unreachable — showing the last real data saved on this device';
+  return c;
+}
 // which sources fell back to synthetic data (drives the mode-badge breakdown)
 function failedSources(){
   const out=[];
@@ -119,6 +129,21 @@ function failedSources(){
     if(t&&t.live===false&&!seen.has(i.tideSta)){ seen.add(i.tideSta); out.push('Tide station '+i.tideSta+' ('+i.tideName+')'); }
   });
   if(d.grid&&d.grid.live===false) out.push('Map SST / wind grid layers');
+  return out;
+}
+// which sources are serving expired-cache data (network failed, real data stood in)
+function cachedSourceList(){
+  const out=[];
+  const d=state.data; if(!d) return out;
+  const tag=s=>' — saved '+nyTimeLabel(new Date(s.cachedAt));
+  CONFIG.inlets.forEach(i=>{const s=d.inlets[i.id]; if(s&&s.src==='cached') out.push(i.name+tag(s));});
+  CONFIG.zones.forEach(z=>{const s=d.zones[z.id]; if(s&&s.src==='cached') out.push(z.name+tag(s));});
+  const seen=new Set();
+  CONFIG.inlets.forEach(i=>{
+    const t=d.tides[i.tideSta];
+    if(t&&t.src==='cached'&&!seen.has(i.tideSta)){ seen.add(i.tideSta); out.push('Tide station '+i.tideSta+tag(t)); }
+  });
+  if(d.grid&&d.grid.src==='cached') out.push('Map SST / wind grid layers'+tag(d.grid));
   return out;
 }
 
@@ -151,10 +176,12 @@ function renderInletCards(){
     card.setAttribute('role','button'); card.tabIndex=0;
     card.dataset.inlet=inl.id;   // focus target when the back button returns here
     const h3=el('h3','',card); h3.textContent=inl.name; el('span','area',h3,inl.area);
-    const dLive=state.data.inlets[inl.id].live!==false;
+    const rec=state.data.inlets[inl.id];
+    const dLive=rec.live!==false;
     const chiprow=el('div','',card); chiprow.style.margin='6px 0 2px';
     chiprow.appendChild(chipFor(now.cls));
     if(!dLive){const s=simChip(chiprow);s.style.marginLeft='6px';}
+    else if(rec.src==='cached'){const s=cachedChip(chiprow,rec.cachedAt);s.style.marginLeft='6px';}
     if(now.conf==='low'){const g=el('span','chip ghost',chiprow,'models disagree');g.style.marginLeft='6px';}
     const stats=el('div','statrow',card);
     const s1=el('div','stat',stats); el('div','lbl',s1,'Seas'); el('div','val',s1,now.hs+' ft'); el('div','sub',s1,'@ '+now.tp+' s '+compass(now.dir));
@@ -193,8 +220,10 @@ function renderDetail(){
   const head=el('div','detailhead',view);
   const h2=el('h2','',head,inl.name);
   head.appendChild(chipFor(hours[0].cls));
-  const dLive=state.data.inlets[inl.id].live!==false;
+  const dRec=state.data.inlets[inl.id];
+  const dLive=dRec.live!==false;
   if(!dLive) simChip(head);
+  else if(dRec.src==='cached') cachedChip(head,dRec.cachedAt);
   if(hours[0].conf==='low') el('span','chip ghost',head,'models disagree');
   el('p','inletnote',view,inl.note);
 
@@ -203,6 +232,7 @@ function renderDetail(){
   el('h3','',p0,'Condition windows — next 72 h');
   el('p','psub',p0,'Boat class: '+(CONFIG.boats[state.boatKey]||'')+' · tide station: '+inl.tideName);
   if(!dLive) el('p','psub simnote',p0,'Forecast source unreachable — the strip and windows below are simulated samples. Check official NWS marine forecasts before planning.');
+  else if(dRec.src==='cached') el('p','psub cachednote',p0,'Source unreachable — showing the last real forecast, saved '+nyTimeLabel(new Date(dRec.cachedAt))+' ET on this device. Refresh when you have signal.');
   statusStrip(p0,hours.slice(0,CONFIG.hoursDetail),{});
   stripLegend(p0);
   const wins=findWindows(hours,CONFIG.hoursDetail);
@@ -345,7 +375,7 @@ function segScore(zoneHours, inletHours, dayStart, fromH, toH, useInlet){
   for(const h of src){
     const local=h.t;
     if(local>=dayStart&&local<new Date(dayStart.getTime()+864e5)){
-      const hr=local.getHours();
+      const hr=nyHour(local);
       if(hr>=fromH&&hr<toH){ arr.push(h); if(!worst||clsRank(h.cls)>clsRank(worst.cls)) worst=h; }
     }
   }
@@ -378,12 +408,18 @@ function renderOffshore(){
   const inletHours=state.scored.inlets[inl.id];
 
   el('p','viewsub',body,zone.note+' Run ≈ '+zone.run_nm+' nm each way from '+inl.name+'. Segments: run out 4–8 am (inlet + open water), on the grounds 8 am–2 pm, run home 2–6 pm.');
-  const zLive=zd.live!==false, depLive=state.data.inlets[inl.id].live!==false;
+  const depRec=state.data.inlets[inl.id];
+  const zLive=zd.live!==false, depLive=depRec.live!==false;
   if(!zLive||!depLive){
     const sr=el('div','',body); sr.style.margin='2px 0 8px';
     if(!zLive){const c=simChip(sr); c.textContent='⚠ SIMULATED — '+zone.name+' source unreachable'; c.style.marginRight='6px';}
     if(!depLive){const c=simChip(sr); c.textContent='⚠ SIMULATED — '+inl.name+' source unreachable';}
     el('p','psub simnote',sr,'Day plans below include simulated segments — check official NWS offshore forecasts.');
+  }else if(zd.src==='cached'||depRec.src==='cached'){
+    const sr=el('div','',body); sr.style.margin='2px 0 8px';
+    if(zd.src==='cached'){const c=cachedChip(sr,zd.cachedAt); c.style.marginRight='6px';}
+    if(depRec.src==='cached'&&depRec!==zd) cachedChip(sr,depRec.cachedAt);
+    el('p','psub cachednote',sr,'Sources unreachable — day plans use the last real forecast saved on this device. Refresh when you have signal.');
   }
 
   const mapP=el('div','panel mappanel',body);
@@ -394,8 +430,8 @@ function renderOffshore(){
 
   const cards=el('div','daycards',body);
   for(let dIdx=0;dIdx<7;dIdx++){
-    const dayStart=new Date(state.scored.start); dayStart.setHours(0,0,0,0); dayStart.setDate(dayStart.getDate()+dIdx);
-    if(dIdx===0&&state.scored.start.getHours()>=14) continue;
+    const dayStart=nyStartOfDay(state.scored.start,dIdx);
+    if(dIdx===0&&nyHour(state.scored.start)>=14) continue;
     const segOutInlet=segScore(zoneHours,inletHours,dayStart,4,8,true);
     const segOutSea=segScore(zoneHours,inletHours,dayStart,5,9,false);
     const segFish=segScore(zoneHours,inletHours,dayStart,8,14,false);
@@ -410,7 +446,8 @@ function renderOffshore(){
     avg=Math.round(avg/segs.length);
     const card=el('div','daycard',cards);
     const h5=el('h3','',card);
-    el('span','',h5,dayLabel(dayStart)+' '+(dayStart.getMonth()+1)+'/'+dayStart.getDate());
+    const dp=nyClockParts(dayStart);
+    el('span','',h5,dayLabel(dayStart)+' '+dp.mo+'/'+dp.day);
     h5.appendChild(chipFor(worst));
     const lowConf=segs.some(([,s])=>s.sample.conf==='low');
     if(lowConf){const g=el('div','',card);g.style.margin='4px 0';el('span','chip ghost',g,'models disagree');}
@@ -535,24 +572,33 @@ function renderAll(){
 function updateModeBadge(){
   const b=$('#modeBadge'), t=$('#modeText');
   b.classList.toggle('live',state.mode==='live');
-  const time=state.fetchedAt?state.fetchedAt.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):'';
+  b.classList.toggle('cached',state.mode==='cached');
+  const time=state.fetchedAt?nyTimeLabel(state.fetchedAt)+' ET':'';
   // past the hard threshold the badge turns amber and becomes a one-tap refresh
   const stale=state.fetchedAt&&(Date.now()-state.fetchedAt.getTime())>STALE_HARD_MS;
   b.classList.toggle('stale',!!stale);
   t.textContent = stale ? 'Stale · fetched '+time+' — tap to refresh'
     : state.mode==='live' ? 'Live data · '+time
+    : state.mode==='cached' ? 'Cached data · saved '+(state.cachedOldest?nyTimeLabel(new Date(state.cachedOldest))+' ET':time)
     : state.mode==='mixed' ? 'Partial live · '+time
     : 'Demo data (offline sample)';
   // source breakdown dropdown (opened by clicking the badge)
   const p=$('#modeSources'); if(!p) return;
   p.textContent='';
   const fails=failedSources();
+  const cached=cachedSourceList();
   if(fails.length){
     el('div','popttl',p,'Simulated sources — unreachable');
     const ul=el('ul','',p);
     fails.forEach(f=>el('li','sim',ul,f));
     el('p','',p,'Everything not listed is live. Verify against official NWS forecasts.');
-  } else {
+  }
+  if(cached.length){
+    el('div','popttl',p,'Cached sources — network unreachable, showing last real data');
+    const ul=el('ul','',p);
+    cached.forEach(f=>el('li','cachednote',ul,f));
+  }
+  if(!fails.length&&!cached.length){
     el('div','popttl',p,'Data sources');
     el('p','',p,state.mode==='live'?'All sources live.':'Source status unavailable.');
   }

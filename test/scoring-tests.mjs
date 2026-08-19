@@ -103,5 +103,24 @@ const zFair = ctx.zoneScoreHour(bigrock, when, 1.0);
 check('18 kn against the Stream scores worse than 18 kn with it', zOpp && zFair && zOpp.score < zFair.score && zOpp.pStream > 0,
   zOpp && zFair && zOpp.score + ' (pStream ' + zOpp.pStream + ') vs ' + zFair.score);
 
+// ---- timezone plumbing: NY wall-time parsing and API-axis hour indexing ----
+check('nyParse: August NY wall time is UTC-4', inCtx('nyParse("2026-08-18T12:00").toISOString()') === '2026-08-18T16:00:00.000Z',
+  inCtx('nyParse("2026-08-18T12:00").toISOString()'));
+check('nyParse: January NY wall time is UTC-5', inCtx('nyParse("2026-01-15T12:00").toISOString()') === '2026-01-15T17:00:00.000Z',
+  inCtx('nyParse("2026-01-15T12:00").toISOString()'));
+check('nyParse accepts the CO-OPS space-separated form', inCtx('nyParse("2026-08-18 12:00").toISOString()') === '2026-08-18T16:00:00.000Z',
+  inCtx('nyParse("2026-08-18 12:00").toISOString()'));
+// the current-hour index must come from the API's own time array, never the viewer's clock
+ctx.hourTimes = Array.from({ length: 24 }, (_, h) => '2026-08-18T' + String(h).padStart(2, '0') + ':00');
+const noonHalf = inCtx('nyParse("2026-08-18T12:30").getTime()');
+check('hourIndexFor finds the hour containing now on the API axis', inCtx(`hourIndexFor(hourTimes, ${noonHalf})`) === 12,
+  inCtx(`hourIndexFor(hourTimes, ${noonHalf})`));
+check('hourIndexFor clamps before the axis start', inCtx('hourIndexFor(hourTimes, nyParse("2026-08-17T05:00").getTime())') === 0,
+  inCtx('hourIndexFor(hourTimes, nyParse("2026-08-17T05:00").getTime())'));
+check('hourIndexFor clamps past the axis end', inCtx('hourIndexFor(hourTimes, nyParse("2026-08-19T05:00").getTime())') === 23,
+  inCtx('hourIndexFor(hourTimes, nyParse("2026-08-19T05:00").getTime())'));
+check('hourIndexFor accepts Date arrays too', inCtx(`hourIndexFor(hourTimes.map(s=>nyParse(s)), ${noonHalf})`) === 12,
+  inCtx(`hourIndexFor(hourTimes.map(s=>nyParse(s)), ${noonHalf})`));
+
 console.log(fail ? `\n${fail}/${pass + fail} scoring checks FAILED` : `\nAll ${pass} scoring checks passed`);
 process.exit(fail ? 1 : 0);

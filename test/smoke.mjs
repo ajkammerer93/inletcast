@@ -1,7 +1,20 @@
 // Smoke tests: three data scenarios (live / offline / mixed) against the real app.
 // Run: node smoke.mjs   (from the test/ directory)
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { loadApp, assert, text } from './harness.mjs';
 import { makeFetchStub } from './fixtures.mjs';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+// copy a window's localStorage into a seed object for the next loadApp
+function snapshotStorage(win) {
+  const seed = {};
+  const ls = win.localStorage;
+  for (let i = 0; i < ls.length; i++) { const k = ls.key(i); seed[k] = ls.getItem(k); }
+  return seed;
+}
 
 const results = [];
 async function scenario(name, fn) {
@@ -298,6 +311,116 @@ await scenario('point-of-use help: status chip opens the class-definition popove
   assert(/never a statement/.test(pop.textContent), 'popover carries the no-go-signal caveat');
   // the chip click must not have navigated into the detail view
   assert(document.getElementById('view-inlets').classList.contains('active'), 'chip click does not open the card');
+  window.close();
+});
+
+await scenario('cache: a second visit within the TTL serves everything from cache with zero fetches', async () => {
+  const stub1 = makeFetchStub();
+  const first = await loadApp({ fetchStub: stub1 });
+  noFatal(first.errors);
+  assert(stub1.calls.length >= 20, `first load made ${stub1.calls.length} fetches, want the full burst`);
+  const seed = snapshotStorage(first.window);
+  assert(Object.keys(seed).some((k) => k.startsWith('inletcast_api_v1:')), 'first load wrote API responses to the cache');
+  first.window.close();
+  const stub2 = makeFetchStub();
+  const second = await loadApp({ fetchStub: stub2, localStorageSeed: seed });
+  noFatal(second.errors);
+  assert(stub2.calls.length === 0, `second load made ${stub2.calls.length} fetches, want 0 (everything fresh in cache)`);
+  const cards = second.document.querySelectorAll('#inletCards .card');
+  assert(cards.length >= 7, `found ${cards.length} cards hydrated from cache, want >= 7`);
+  const badge = second.document.getElementById('modeBadge');
+  assert(/live data/i.test(badge.textContent), `fresh-cache badge says "${badge.textContent}"`);
+  assert(!/SIMULATED/.test(second.document.body.textContent), 'no SIMULATED labels on a fresh-cache load');
+  second.window.close();
+});
+
+await scenario('offline with a warm (expired) cache: real data labeled CACHED, never SIMULATED', async () => {
+  const first = await loadApp({ fetchStub: makeFetchStub() });
+  noFatal(first.errors);
+  const seed = snapshotStorage(first.window);
+  first.window.close();
+  // age every cached response past all TTLs (13 h), then go fully offline
+  for (const k of Object.keys(seed)) {
+    if (!k.startsWith('inletcast_api_v1:')) continue;
+    const rec = JSON.parse(seed[k]);
+    rec.t = Date.now() - 13 * 3600e3;
+    seed[k] = JSON.stringify(rec);
+  }
+  const offline = await loadApp({ fetchStub: makeFetchStub(() => true), localStorageSeed: seed });
+  noFatal(offline.errors);
+  const badge = offline.document.getElementById('modeBadge');
+  assert(/cached data/i.test(badge.textContent), `badge says "${badge.textContent}"`);
+  const cards = [...offline.document.querySelectorAll('#inletCards .card')];
+  assert(cards.length >= 7, `found ${cards.length} cards, want >= 7`);
+  for (const c of cards) {
+    assert(!/SIMULATED/.test(c.textContent), 'card wrongly labeled SIMULATED with a warm cache');
+    assert(/CACHED/.test(c.textContent), 'card carries the CACHED chip');
+  }
+  // cached is real data — no demo watermark, and the detail view explains the state
+  const watermarks = [...offline.document.querySelectorAll('svg text')].filter((t) => t.textContent === 'DEMO DATA');
+  assert(watermarks.length === 0, 'no DEMO watermark when the cache holds real data');
+  cards[0].click();
+  const detail = offline.document.getElementById('view-detail');
+  assert(/CACHED/.test(detail.querySelector('.detailhead').textContent), 'detail header carries the CACHED chip');
+  assert(/last real forecast/.test(detail.textContent), 'detail explains the cached fallback');
+  // badge dropdown lists the cached sources
+  badge.click();
+  const src = offline.document.getElementById('modeSources');
+  assert(src && /Cached sources/.test(src.textContent), 'source list explains the cached state');
+  offline.window.close();
+});
+
+await scenario('cache: first-ever visit offline still lands on clearly-labeled demo mode', async () => {
+  // fresh localStorage + dead network: synthetic demo remains the first-visit fallback
+  const { window, document, errors } = await loadApp({ fetchStub: makeFetchStub(() => true) });
+  noFatal(errors);
+  const badge = document.getElementById('modeBadge');
+  assert(/demo/i.test(badge.textContent), `badge says "${badge.textContent}"`);
+  window.close();
+});
+
+await scenario('animation: leaving a view stops its wind-particle canvas', async () => {
+  const { window, document, errors } = await loadApp({ fetchStub: makeFetchStub() });
+  noFatal(errors);
+  window.eval('setView("offshore");');
+  const offCv = document.querySelector('#view-offshore canvas');
+  assert(offCv, 'offshore map renders a particle canvas');
+  window.eval('setView("inlets");');
+  assert(offCv.dataset.stop === '1', 'hidden offshore canvas is flagged to stop');
+  const inCv = document.querySelector('#view-inlets canvas');
+  assert(inCv && inCv.dataset.stop !== '1', 'active-view canvas keeps running');
+  window.close();
+});
+
+await scenario('pwa & seo: manifest linked, versioned sw precaches the shell, sitemap lists the site', async () => {
+  const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
+  assert(/<link rel="manifest" href="manifest.json">/.test(html), 'index.html links the manifest');
+  const man = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8'));
+  assert(man.name && man.short_name === 'InletCast' && man.start_url, 'manifest carries name/short_name/start_url');
+  const sw = readFileSync(join(ROOT, 'sw.js'), 'utf8');
+  for (const f of ['index.html', 'css/styles.css', 'js/app.js', 'js/config.js', 'og.png']) {
+    assert(sw.includes(`'${f}'`), `sw.js precaches ${f}`);
+  }
+  assert(/importScripts\('js\/config\.js'\)/.test(sw) && /APP_VERSION/.test(sw), 'sw cache name is versioned from APP_VERSION');
+  const sm = readFileSync(join(ROOT, 'sitemap.xml'), 'utf8');
+  assert(/<loc>https:\/\/inletcast\.com\/<\/loc>/.test(sm), 'sitemap lists the canonical URL');
+  // registration is guarded: jsdom has no navigator.serviceWorker and the app must still boot
+  const { window, errors } = await loadApp({ fetchStub: makeFetchStub() });
+  noFatal(errors);
+  assert(typeof window.navigator.serviceWorker === 'undefined', 'jsdom really lacks serviceWorker (guard exercised)');
+  window.close();
+});
+
+await scenario('timezone: displayed times are Eastern regardless of the viewer clock', async () => {
+  const { window, document, errors } = await loadApp({ fetchStub: makeFetchStub() });
+  noFatal(errors);
+  const badge = document.getElementById('modeBadge');
+  assert(/ET/.test(badge.textContent), `badge stamps the timezone: "${badge.textContent}"`);
+  // hour/day labels route through the NY formatter (spot-check a known instant: 16:00Z in August = 12p ET)
+  const noonET = window.eval('hourLabel(new Date("2026-08-18T16:00:00Z"))');
+  assert(noonET === '12p', `hourLabel(16:00Z) is "${noonET}", want "12p" (noon ET)`);
+  const wd = window.eval('dayLabel(new Date("2026-08-19T02:00:00Z"))');
+  assert(wd === 'Tue', `dayLabel(Wed 02:00Z) is "${wd}", want "Tue" (still Tuesday in NY)`);
   window.close();
 });
 

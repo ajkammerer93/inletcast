@@ -137,7 +137,7 @@ function zoneScoreHour(zone, when, boatFactor){
 }
 
 function scoreAll(){
-  const start=new Date(); start.setMinutes(0,0,0);
+  const start=startOfHour();
   const scored={inlets:{}, start};
   for(const inl of CONFIG.inlets){
     const hours=[];

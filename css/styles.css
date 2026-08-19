@@ -81,6 +81,8 @@ h1.logo { font-weight:700; font-size:20px; letter-spacing:-0.02em; }
 .mode-badge:hover { outline:1px solid var(--hairline); }
 .mode-badge .dot { width:7px; height:7px; border-radius:50%; background:var(--ink-3); }
 .mode-badge.live .dot { background:var(--st-good); }
+/* all real data, but served from an expired cache after a network failure */
+.mode-badge.cached .dot { background:var(--st-warn); }
 /* data older than the hard staleness threshold: amber badge, one tap = refresh */
 .mode-badge.stale { background:var(--st-warn); color:#3a2a00; }
 .mode-badge.stale .dot { background:#3a2a00; }
@@ -215,6 +217,9 @@ p.viewsub { font-size:13px; color:var(--ink-2); margin-bottom:14px; }
   color:#fff; letter-spacing:.04em; text-transform:uppercase;
 }
 .simnote { color:var(--st-critical); font-weight:600; }
+/* expired-cache marker — real data saved earlier: amber, between live and simulated */
+.chip.cached { background:var(--st-warn); color:#3a2a00; letter-spacing:.04em; }
+.cachednote { color:var(--ink-2); font-weight:600; }
 
 /* status strip */
 .strip { margin-top:10px; }

@@ -89,6 +89,18 @@ function buildSSTRaster(g, vmin, vmax){
   ctx.putImageData(img,0,0);
   return {url:cv.toDataURL('image/png'), lonLo, lonHi, latLo, latHi};
 }
+/* one-slot raster cache: building the data-URL is the priciest part of a map render,
+   and the pixels depend only on the grid object + value range (+ theme, for safety) —
+   so theme toggles and re-renders of either map reuse the same URL */
+let _sstRasterCache=null; // {grid, key, raster}
+function sstRaster(g, vmin, vmax){
+  const theme=document.documentElement.getAttribute('data-theme')||'auto';
+  const key=vmin+':'+vmax+':'+theme;
+  if(_sstRasterCache&&_sstRasterCache.grid===g&&_sstRasterCache.key===key) return _sstRasterCache.raster;
+  const raster=buildSSTRaster(g,vmin,vmax);
+  _sstRasterCache={grid:g, key, raster};
+  return raster;
+}
 function startWindParticles(canvas, g, proj){
   const ctx=canvas.getContext('2d');
   const W=canvas.width, H=canvas.height;
@@ -168,7 +180,7 @@ function coastMap(parent, opts){
     if(vals.length){ sstMin=Math.min(...vals)-0.2; sstMax=Math.max(...vals)+0.2; }
   }
   if(state.layers.sst&&sstGrid&&sstMin!=null){
-    const r=buildSSTRaster(sstGrid,sstMin,sstMax);
+    const r=sstRaster(sstGrid,sstMin,sstMax);
     svgEl('image',{href:r.url,x:X(r.lonLo),y:Y(r.latHi),
       width:X(r.lonHi)-X(r.lonLo),height:Y(r.latLo)-Y(r.latHi),
       preserveAspectRatio:'none',opacity:1},svg);
@@ -409,7 +421,7 @@ function layerToggles(head){
     b.setAttribute('aria-pressed',String(state.layers[key]));
     b.addEventListener('click',()=>{
       state.layers[key]=!state.layers[key];
-      renderInletCards(); renderOffshore();
+      renderActiveView(); // the hidden map re-renders with the new layers on its next activation
     });
   };
   mk('sst','SST'); mk('wind','Wind');

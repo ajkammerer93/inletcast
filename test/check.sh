@@ -10,6 +10,13 @@ if ls ../js/*.js >/dev/null 2>&1; then
     if node --check "$f" 2>&1; then echo "  ok $f"; else fail=1; fi
   done
 fi
+# the service worker is a root-level classic script — check it too
+if [ -f ../sw.js ]; then
+  if node --check ../sw.js 2>&1; then echo "  ok ../sw.js"; else fail=1; fi
+fi
+# manifest.json must stay valid JSON
+node -e 'JSON.parse(require("fs").readFileSync("../manifest.json","utf8"))' \
+  && echo "  ok ../manifest.json" || fail=1
 # also check any inline scripts remaining in index.html
 node - <<'EOF' || fail=1
 const fs = require('fs');
