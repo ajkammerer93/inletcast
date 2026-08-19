@@ -22,7 +22,7 @@ export function marinePoint() {
   const n = t.length;
   const mk = (b, a, p, ph) => series(n, b, a, p, ph);
   const h = { time: t };
-  for (const m of ['gfs_wave025', 'ecmwf_wam025']) {
+  for (const m of ['ncep_gfswave025', 'ecmwf_wam025']) {
     const ph = m.startsWith('gfs') ? 0 : 0.3;
     h['wave_height_' + m] = mk(2.4, 1.1, 36, ph);
     h['wave_period_' + m] = mk(8.5, 2.5, 48, ph);

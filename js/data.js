@@ -51,14 +51,14 @@ async function fetchJSONCached(url, ttlMs, timeoutMs){
 async function fetchMarine(lat,lon){
   const url='https://marine-api.open-meteo.com/v1/marine?latitude='+lat+'&longitude='+lon
     +'&hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction'
-    +'&models=gfs_wave025,ecmwf_wam025&length_unit=imperial&timezone=America%2FNew_York&forecast_days=8';
+    +'&models=ncep_gfswave025,ecmwf_wam025&length_unit=imperial&timezone=America%2FNew_York&forecast_days=8';
   const r=await fetchJSONCached(url,CACHE_TTL.point);
   const h=r.j.hourly||{};
   const pick=(base,model)=>h[base+'_'+model]||h[base]||[];
   return { src:r.src, at:r.at,
     t:(h.time||[]).map(nyParse),
-    gfs:{ hs:pick('wave_height','gfs_wave025'), tp:pick('wave_period','gfs_wave025'), dir:pick('wave_direction','gfs_wave025'),
-          shs:pick('swell_wave_height','gfs_wave025'), stp:pick('swell_wave_period','gfs_wave025'), sdir:pick('swell_wave_direction','gfs_wave025') },
+    gfs:{ hs:pick('wave_height','ncep_gfswave025'), tp:pick('wave_period','ncep_gfswave025'), dir:pick('wave_direction','ncep_gfswave025'),
+          shs:pick('swell_wave_height','ncep_gfswave025'), stp:pick('swell_wave_period','ncep_gfswave025'), sdir:pick('swell_wave_direction','ncep_gfswave025') },
     ecmwf:{ hs:pick('wave_height','ecmwf_wam025'), tp:pick('wave_period','ecmwf_wam025'), dir:pick('wave_direction','ecmwf_wam025'),
             shs:pick('swell_wave_height','ecmwf_wam025'), stp:pick('swell_wave_period','ecmwf_wam025'), sdir:pick('swell_wave_direction','ecmwf_wam025') },
   };
