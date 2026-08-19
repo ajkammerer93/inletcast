@@ -13,13 +13,15 @@ function titleFor(v){
   const base='InletCast';
   if(v==='detail'){ const inl=CONFIG.inlets.find(i=>i.id===state.detailInlet); if(inl) return inl.name+' — '+base; }
   const t={offshore:'Offshore planner',models:'Model agreement',method:'How InletCast works',terms:'Terms of Use'}[v];
-  return t?t+' — '+base:base+' — NC Inlet Condition Windows (Prototype)';
+  return t?t+' — '+base:base+' — NC Inlet Crossing Windows & Gulf Stream SST';
 }
 function setView(v){
   const prev=state.view;
   state.view=v;
   $$('.view').forEach(x=>x.classList.remove('active'));
   $('#view-'+(v==='detail'?'detail':v)).classList.add('active');
+  // the hero pitch belongs to the Inlets view only; other tabs open with their own title
+  const hero=$('#hero'); if(hero) hero.hidden=v!=='inlets';
   // tabs pattern: active class + aria-selected + roving tabindex stay in sync
   $$('nav.tabs button').forEach(b=>{
     const on=b.dataset.view===v||(v==='detail'&&b.dataset.view==='inlets');
@@ -154,6 +156,8 @@ function renderInletCards(){
     const mh=el('div','maphead',mp); el('h3','',mh,'The coast at a glance');
     el('span','',mh,'markers show current conditions — tap one to open the inlet');
     const sp=el('span','spacer',mh); layerToggles(mh);
+    // the competitive frame, stated once where the SST layer is on screen
+    el('p','mapvalue',mp,'The same class of satellite SST the paid chart services sell — free — plus a crossing score for your inlet and your boat.');
     coastMap(mp);
     stripLegend(mp).style.padding='6px 4px 4px';
   }
@@ -552,16 +556,16 @@ function renderModels(){
 function renderMethod(){
   const b=$('#methodBody'); if(b.childNodes.length) return;
   const add=(h,t)=>{if(h)el('h3','',b,h);el('p','',b,t);};
-  add(null,'InletCast is a prototype by Ghosttree Technical Solutions, LLC — a working demonstration of inlet-scale condition guidance for the Southeast NC coast, built by a forecaster who runs these inlets.');
+  add(null,'InletCast is a prototype built by AJ Kammerer, a marine forecaster who runs these inlets — a working demonstration of inlet-scale condition guidance for the Southeast NC coast.');
   add('Data','Wave guidance comes from two independent operational wave models (NOAA GFS-Wave and ECMWF WAM) at a nearshore point off each inlet, via the Open-Meteo API (weather data by Open-Meteo.com, CC BY 4.0 — link in the footer). Winds are GFS and ECMWF 10 m fields. Tides are NOAA CO-OPS harmonic predictions from the nearest reference station. When live sources are unreachable, the app runs on clearly-labeled synthetic demo data so you can still explore the interface.');
   add('The score','Each hour gets a 0–100 score built from four transparent penalties: sea state (height and short-period steepness), wind (speed, gusts, onshore component), a bar-breaking term — a shoaled-height proxy that grows with swell period and each inlet’s shoaling factor, because long-period energy is what shoals, jacks, and breaks on an ebb delta — and the tide term: ebb strength multiplied by how directly the swell opposes the channel, weighted by each inlet’s shoaling behavior. Swell direction and period come from the models’ swell partition when available, so wind chop cannot hide an opposed ground swell. The ebb strength is deliberately widened about ±90 minutes, since the tide stations are timing proxies. On top of the score, hard overrides force Hazardous whenever the raw sea height can break a shoal bar — regardless of boat class, which scales comfort, never a breaking bar — and a strong ebb against a long-period swell over a shoal bar forces at least Rough. Nothing is a black box: the "why" panel shows every penalty.');
   // single-sourced from CLS_META so the status-chip popover and this paragraph never drift
   add('What the classes mean',['good','warn','serious','critical'].map(k=>{const m=CLS_META[k];return m.label+' ('+m.ic+'): '+m.desc;}).join(' ')+' '+CLS_NOTE);
   add('What this prototype does not yet do','No inlet-specific bathymetry or surf-zone wave transformation (the production version applies a per-inlet shoaling model tuned against buoy and camera verification); no real-time buoy assimilation; no USACE survey ingestion; tide stations are nearest-reference proxies for some inlets; no current predictions at the inlet mouth; wind against the Stream is only a crude opposing-wind heuristic, not a current or eddy model; no convection or thunderstorm input for the afternoon return legs. Every one of these is on the roadmap — and the scoring will be verified publicly against buoy observations, the standard way operational marine models are verified.');
-  add('Map layers','The SST fill prefers the MUR 1-km satellite-blended SST analysis (NASA/JPL, served by NOAA CoastWatch) — cloud-tolerant, because it blends many satellite passes, but smoother than single-pass imagery — and falls back to smoothed NWP-model SST, then labeled demo data, if unreachable. The legend shows the analysis date and age when available. Wind streamlines are sampled from NWP 10 m winds on a grid across Onslow Bay, bilinearly interpolated; the particle animation follows the interpolated wind exactly, in the style of the freesurfforecast swell map. Toggle layers with the SST / Wind buttons; the cursor readout at the bottom-left gives exact interpolated values. Note that in mid-summer the true SST contrast across the west wall is at its annual minimum — a faint August wall is the ocean, not a bug — which is why chlorophyll and altimetry are the planned complements.');
+  add('Map layers','The SST fill prefers the MUR 1-km satellite-blended SST analysis (NASA/JPL, served by NOAA CoastWatch) — cloud-tolerant, because it blends many satellite passes, but smoother than single-pass imagery — and falls back to smoothed NWP-model SST, then labeled demo data, if unreachable. The legend shows the analysis date and age when available. Wind streamlines are sampled from NWP 10 m winds on a grid across Onslow Bay, bilinearly interpolated; the particle animation follows the interpolated wind exactly. Toggle layers with the SST / Wind buttons; the cursor readout at the bottom-left gives exact interpolated values. Note that in mid-summer the true SST contrast across the west wall is at its annual minimum — a faint August wall is the ocean, not a bug — which is why chlorophyll and altimetry are the planned complements.');
   add('The Gulf Stream line','The orange front line on the map is detected live from the same SST field the map displays — the MUR 1-km satellite-blended analysis when it is reachable, otherwise NWP-model SST. We sample that field along five cross-shelf transects, place a point at the strongest temperature step on each line, and connect them. When the steps are strong the line is a fair read on the west wall; when they are weak the map labels it "strongest SST front" instead, because a blended analysis can smear a faint summer wall. On the NWP fallback (~25 km analysis) it is good enough to see whether the stream is riding in or pushed offshore, not good enough to find a finger or an eddy edge. Production versions would blend single-pass satellite SST (GOES, VIIRS) and ocean model output (RTOFS) for chart-service-grade edges. Treat it as orientation, not navigation.');
   add('The honest caveat','A forecast cannot see today’s bar. Inlets shoal, channels move, and a model point a few miles offshore is not the standing wave on the ebb delta. Treat every window as a hypothesis to verify with your eyes, official NWS forecasts, and local knowledge.');
-  el('p','sig',b,'Built by AJ Kammerer · Ghosttree Technical Solutions, LLC · Hampstead, NC — prototype v'+APP_VERSION+', August 2026.');
+  el('p','sig',b,'Built by AJ Kammerer, a marine forecaster who runs these inlets · Hampstead, NC — prototype v'+APP_VERSION+', August 2026.');
 }
 
 function renderAll(){

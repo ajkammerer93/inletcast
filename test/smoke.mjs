@@ -411,6 +411,66 @@ await scenario('pwa & seo: manifest linked, versioned sw precaches the shell, si
   window.close();
 });
 
+await scenario('marketing & seo: share meta, JSON-LD, hero pitch, person byline, copy-email fallback', async () => {
+  const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
+  // <title> is the SERP/share headline — crossing-window framing, no prototype hedge
+  const title = html.match(/<title>([^<]*)<\/title>/);
+  assert(title && !/Prototype/i.test(title[1]), `<title> must not say Prototype, got "${title && title[1]}"`);
+  assert(/InletCast — NC Inlet Crossing Windows &amp; Gulf Stream SST/.test(title[1]), `title framing wrong, got "${title[1]}"`);
+  const desc = html.match(/<meta name="description" content="([^"]*)"/);
+  assert(desc && /Free beta/.test(desc[1]) && !/prototype/i.test(desc[1]), 'meta description keeps "Free beta" and drops "prototype"');
+  // share card: absolute og:image with dimensions, plus the twitter card pair
+  assert(/<meta property="og:image" content="https:\/\/inletcast\.com\/og\.png">/.test(html), 'og:image absolute URL present');
+  assert(/<meta property="og:image:width" content="1200">/.test(html), 'og:image:width present');
+  assert(/<meta property="og:image:height" content="630">/.test(html), 'og:image:height present');
+  assert(/<meta name="twitter:card" content="summary_large_image">/.test(html), 'twitter:card present');
+  assert(/<meta name="twitter:image" content="https:\/\/inletcast\.com\/og\.png">/.test(html), 'twitter:image present');
+  // JSON-LD block parses and describes the app
+  const ld = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+  assert(ld, 'head carries a JSON-LD script');
+  const data = JSON.parse(ld[1]);
+  assert(data['@type'] === 'WebApplication' && data.name === 'InletCast', 'JSON-LD is a WebApplication named InletCast');
+  // static crawlable copy: all seven inlets named in the raw HTML, before any JS runs
+  for (const n of ['Masonboro', 'Carolina Beach', 'Cape Fear', 'New Topsail', 'New River', 'Bogue', 'Beaufort']) {
+    assert(html.includes(n), `static HTML names ${n}`);
+  }
+  const { window, document, errors } = await loadApp({ fetchStub: makeFetchStub() });
+  noFatal(errors);
+  assert(!/Prototype/.test(document.title), `live document.title must not say Prototype, got "${document.title}"`);
+  const h1 = document.querySelector('h1');
+  assert(h1 && /InletCast/.test(h1.textContent), 'h1 present and names InletCast');
+  // hero: value copy first, disclaimer banner second, Inlets view only
+  const hero = document.getElementById('hero');
+  assert(hero && !hero.hidden, 'hero visible on the Inlets view');
+  assert(/When can you get out — and when can you get back in\?/.test(hero.textContent), 'hero carries the value headline');
+  assert(/Free crossing-condition windows for North Carolina inlets, scored for your boat size\./.test(hero.textContent), 'hero carries the supporting sentence');
+  const banner = document.getElementById('banner');
+  assert(banner && (hero.compareDocumentPosition(banner) & 4), 'hero precedes the disclaimer banner in document order');
+  window.eval('setView("method");');
+  assert(hero.hidden, 'hero hidden on other views');
+  window.eval('setView("inlets");');
+  assert(!hero.hidden, 'hero returns with the Inlets view');
+  // competitive frame on the map panel; Method drops the freesurfforecast name-drop
+  assert(/The same class of satellite SST the paid chart services sell — free/.test(text(document, '#coastPanel') || ''), 'map panel carries the competitive frame');
+  assert(!/freesurfforecast/.test(text(document, '#methodBody') || ''), 'Method drops the freesurfforecast name-drop');
+  // person-first byline in Method and footer; the LLC stays in the copyright line only
+  assert(/Built by AJ Kammerer, a marine forecaster who runs these inlets/.test(text(document, '#methodBody') || ''), 'Method leads with the person byline');
+  assert(/Built by AJ Kammerer, a marine forecaster who runs these inlets/.test(text(document, 'footer.disc') || ''), 'footer carries the person byline');
+  assert(!/Ghosttree/.test(text(document, '#methodBody') || ''), 'Method no longer names the LLC');
+  assert(/© 2026 Ghosttree Technical Solutions, LLC/.test(text(document, 'footer.disc') || ''), 'LLC stays in the copyright line');
+  assert(!/Monday and Thursday/.test(document.body.textContent), 'no update-cadence promise anywhere on the page');
+  // CTA: mailto keeps working, and a Copy email fallback reveals the address without a mail client
+  const cta = document.querySelector('a.betabtn');
+  assert(cta && /Get beta updates by email/.test(cta.textContent), `beta CTA says "${cta && cta.textContent}"`);
+  const btn = document.getElementById('copyEmailBtn');
+  assert(btn, 'Copy email fallback button present');
+  const addrSpan = document.getElementById('copyAddr');
+  assert(addrSpan && addrSpan.hidden, 'address stays hidden until the fallback fires');
+  btn.click(); // jsdom has no Clipboard API — the click must degrade to the text reveal
+  assert(!addrSpan.hidden && /@/.test(addrSpan.textContent), `fallback reveals the address, got "${addrSpan.textContent}"`);
+  window.close();
+});
+
 await scenario('timezone: displayed times are Eastern regardless of the viewer clock', async () => {
   const { window, document, errors } = await loadApp({ fetchStub: makeFetchStub() });
   noFatal(errors);

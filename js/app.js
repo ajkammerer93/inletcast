@@ -84,6 +84,21 @@ async function boot(){
     try{ localStorage.setItem(ACK_KEY,'1'); }catch(e){}
     $('#banner').remove();
   });
+  // beta CTA fallback: mailto fails silently without a configured mail client, so the
+  // Copy email button puts the address on the clipboard — or reveals it as selectable
+  // text when the Clipboard API is unavailable. Address is single-sourced from the link.
+  const copyBtn=$('#copyEmailBtn');
+  if(copyBtn) copyBtn.addEventListener('click',()=>{
+    const link=$('a.betabtn');
+    const addr=((link&&link.getAttribute('href'))||'').replace(/^mailto:/,'').split('?')[0];
+    const reveal=()=>{ const s=$('#copyAddr'); if(s){ s.textContent=addr; s.hidden=false; } };
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(addr).then(()=>{
+        copyBtn.textContent='Copied ✓';
+        setTimeout(()=>{ copyBtn.textContent='Copy email'; },2000);
+      }).catch(reveal);
+    } else reveal();
+  });
   // terms links switch views in-app; without JS the #view-terms fragment still works via CSS :target
   $$('a[href="#view-terms"]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();setView('terms');}));
   $('#modeBadge').addEventListener('click',onBadgeClick);

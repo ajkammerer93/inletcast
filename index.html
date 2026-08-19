@@ -3,15 +3,34 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>InletCast — NC Inlet Condition Windows (Prototype)</title>
-<meta name="description" content="Crossing-condition windows for North Carolina inlets, a Gulf Stream trip planner, live satellite SST, and honest model-agreement forecasts. Free beta prototype by Ghosttree Technical Solutions, LLC.">
+<title>InletCast — NC Inlet Crossing Windows &amp; Gulf Stream SST</title>
+<meta name="description" content="Crossing-condition windows for North Carolina inlets, a Gulf Stream trip planner, live satellite SST, and honest model-agreement forecasts. Free beta by AJ Kammerer, a marine forecaster who runs these inlets.">
 <link rel="canonical" href="https://inletcast.com/">
-<meta property="og:title" content="InletCast — NC inlet condition windows">
+<meta property="og:title" content="InletCast — NC inlet crossing windows">
 <meta property="og:description" content="When can you get out, and when can you get back in. Inlet crossing windows, Gulf Stream planning, and live satellite SST for the NC coast.">
 <meta property="og:url" content="https://inletcast.com/">
 <meta property="og:type" content="website">
+<meta property="og:image" content="https://inletcast.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://inletcast.com/og.png">
 <meta name="theme-color" content="#2a78d6">
 <link rel="manifest" href="manifest.json">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "InletCast",
+  "url": "https://inletcast.com/",
+  "applicationCategory": "Weather",
+  "operatingSystem": "Any",
+  "browserRequirements": "Requires JavaScript",
+  "description": "Free crossing-condition windows for North Carolina inlets — Masonboro, Carolina Beach, Cape Fear, New Topsail, New River, Bogue, and Beaufort — plus a Gulf Stream trip planner and live satellite sea-surface temperature.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "AJ Kammerer" }
+}
+</script>
 <!-- TODO: add a Content-Security-Policy meta tag once the inline theme snippet below
      moves to a hashed or external script — until then a CSP would break it. -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232a78d6'/%3E%3Cpath d='M8 40c6-8 10-8 16 0s10 8 16 0 10-8 16 0' stroke='white' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3Cpath d='M8 52c6-8 10-8 16 0s10 8 16 0 10-8 16 0' stroke='white' stroke-width='5' fill='none' stroke-linecap='round' opacity='.55'/%3E%3C/svg%3E">
@@ -31,7 +50,9 @@ try{var t=localStorage.getItem('inletcast_theme');if(t==='dark'||t==='light')doc
     <button type="button" class="mode-badge" id="modeBadge" aria-live="polite" aria-expanded="false" title="Data source status — activate for details"><span class="dot"></span><span id="modeText">Loading…</span></button>
     <div class="mode-sources" id="modeSources" hidden></div>
     <span class="spacer"></span>
-    <a class="iconbtn betabtn" href="mailto:andrew.kammerer@gts-llc.biz?subject=Add%20me%20to%20the%20InletCast%20beta%20list&body=Home%20inlet%3A%20%0ABoat%3A%20%0AWhat%20I%20fish%2Frun%20for%3A%20">Get beta updates</a>
+    <a class="iconbtn betabtn" href="mailto:andrew.kammerer@gts-llc.biz?subject=Add%20me%20to%20the%20InletCast%20beta%20list&body=Home%20inlet%3A%20%0ABoat%3A%20%0AWhat%20I%20fish%2Frun%20for%3A%20">Get beta updates by email</a>
+    <button type="button" class="iconbtn" id="copyEmailBtn" title="Copy the beta email address — if the email link doesn't open your mail app">Copy email</button>
+    <span class="copyaddr" id="copyAddr" hidden></span>
     <button class="iconbtn" id="themeBtn" title="Toggle theme" aria-label="Toggle color theme">◐</button>
   </div>
   <div class="filters" role="group" aria-label="Global filters">
@@ -58,6 +79,13 @@ try{var t=localStorage.getItem('inletcast_theme');if(t==='dark'||t==='light')doc
 </header>
 
 <main>
+  <!-- hero: value copy first — shown on the Inlets view (setView hides it elsewhere),
+       and it sits above the notice banner so a new visitor reads what the site does
+       before the disclaimer. Static HTML so the pitch is crawlable without JS. -->
+  <div class="hero" id="hero">
+    <h2 class="herotitle">When can you get out — and when can you get back in?</h2>
+    <p class="herosub">Free crossing-condition windows for North Carolina inlets, scored for your boat size.</p>
+  </div>
   <div class="notice" id="banner">
     <div><strong>Decision support, not a decision.</strong> InletCast summarizes model guidance about inlet and offshore conditions. It does not know your boat, your crew, or what the water looks like today. Local knowledge, official NWS forecasts, and your own judgment come first. By using InletCast you accept the <a href="#view-terms">Terms of Use</a>.</div>
     <button id="bannerClose" aria-label="Dismiss">✕</button>
@@ -97,6 +125,8 @@ try{var t=localStorage.getItem('inletcast_theme');if(t==='dark'||t==='light')doc
 
   <section class="view" id="view-method" role="tabpanel" aria-labelledby="tab-method">
     <h2 class="viewtitle">How InletCast works</h2>
+    <!-- static, crawlable summary (methodBody is JS-rendered): names every covered inlet -->
+    <p class="viewsub">InletCast scores crossing-condition windows for seven North Carolina inlets — Masonboro Inlet, Carolina Beach Inlet, the Cape Fear River entrance, New Topsail Inlet, New River Inlet, Bogue Inlet, and Beaufort Inlet — and pairs them with a Gulf Stream trip planner and live satellite sea-surface temperature for Onslow Bay and the Southeast NC coast.</p>
     <div class="method" id="methodBody"></div>
   </section>
 
@@ -124,7 +154,7 @@ try{var t=localStorage.getItem('inletcast_theme');if(t==='dark'||t==='light')doc
 </main>
 
 <div class="tooltip" id="tooltip"></div>
-<footer class="disc">Guidance only — never a statement that a crossing is safe. Verify against official NWS marine forecasts &amp; local observations. InletCast is not affiliated with, operated by, or endorsed by NOAA or the National Weather Service. Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0) · <a href="#view-terms">Terms of Use &amp; Privacy</a> · © 2026 Ghosttree Technical Solutions, LLC · InletCast prototype <span id="appVer"></span></footer>
+<footer class="disc">Guidance only — never a statement that a crossing is safe. Verify against official NWS marine forecasts &amp; local observations. InletCast is not affiliated with, operated by, or endorsed by NOAA or the National Weather Service. Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0) · <a href="#view-terms">Terms of Use &amp; Privacy</a> · Built by AJ Kammerer, a marine forecaster who runs these inlets · © 2026 Ghosttree Technical Solutions, LLC · InletCast prototype <span id="appVer"></span></footer>
 <script src="js/config.js"></script>
 <script src="js/utils.js"></script>
 <script src="js/data.js"></script>

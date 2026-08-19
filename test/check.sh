@@ -21,12 +21,18 @@ node -e 'JSON.parse(require("fs").readFileSync("../manifest.json","utf8"))' \
 node - <<'EOF' || fail=1
 const fs = require('fs');
 const html = fs.readFileSync('../index.html', 'utf8');
-const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;
+const re = /<script(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/gi;
 let m, i = 0, bad = 0;
 while ((m = re.exec(html))) {
   i++;
-  if (!m[1].trim()) continue;
-  fs.writeFileSync(`/tmp/inline_script_${i}.js`, m[1]);
+  if (!m[2].trim()) continue;
+  // non-JS blocks (JSON-LD structured data) must be valid JSON, not valid JS
+  if (/type\s*=\s*"application\/ld\+json"/i.test(m[1])) {
+    try { JSON.parse(m[2]); console.log(`  ok inline script #${i} (ld+json)`); }
+    catch (e) { console.log(`  inline script #${i} (ld+json) FAILS: ${e.message}`); bad++; }
+    continue;
+  }
+  fs.writeFileSync(`/tmp/inline_script_${i}.js`, m[2]);
   const { spawnSync } = require('child_process');
   const r = spawnSync('node', ['--check', `/tmp/inline_script_${i}.js`], { encoding: 'utf8' });
   if (r.status !== 0) { console.log(`  inline script #${i} FAILS: ${r.stderr}`); bad++; }

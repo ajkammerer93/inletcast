@@ -106,6 +106,8 @@ h1.logo { font-weight:700; font-size:20px; letter-spacing:-0.02em; }
 .iconbtn:hover { background:var(--chip-bg); }
 a.betabtn { text-decoration:none; background:var(--accent-btn); border-color:var(--accent-btn); color:#fff; font-weight:600; }
 a.betabtn:hover { opacity:.9; background:var(--accent-btn); }
+/* revealed by the Copy email fallback when the Clipboard API is unavailable */
+.copyaddr { font-size:12px; color:var(--ink-2); user-select:all; }
 
 /* filter row */
 .filters {
@@ -136,6 +138,11 @@ main { max-width:980px; margin:0 auto; padding:16px; }
 .view:target { display:block; }
 h2.viewtitle { font-size:17px; margin:2px 0 2px; letter-spacing:-0.01em; }
 p.viewsub { font-size:13px; color:var(--ink-2); margin-bottom:14px; }
+
+/* hero: value pitch above the notice banner on the Inlets view */
+.hero { margin:2px 0 14px; }
+.hero h2.herotitle { font-size:22px; letter-spacing:-0.02em; margin:0 0 4px; }
+.hero p.herosub { font-size:14px; color:var(--ink-2); margin:0; }
 
 /* notice banner */
 .notice {
@@ -298,6 +305,7 @@ table.data td:first-child { color:var(--ink-1); }
 /* text alternative for the pointer-only west-wall overlay */
 .wallnote { font-size:11px; color:var(--ink-2); padding:2px 4px 4px; max-width:700px; margin:0 auto; }
 .mappanel .maphead { display:flex; align-items:baseline; gap:10px; padding:2px 4px 6px; }
+.mappanel .mapvalue { font-size:12px; color:var(--ink-2); padding:0 4px 6px; }
 .mappanel .maphead h3 { font-size:13px; }
 .mappanel .maphead span { font-size:11px; color:var(--ink-3); }
 
