@@ -34,11 +34,11 @@ function cacheWrite(url,json){
 /* fetch-through-cache → {j, src:'live'|'cached', at}. 'cached' means the network
    failed and an expired cached response stood in; fresh cache counts as live.
    Throws only when there is neither network nor cache. */
-async function fetchJSONCached(url, ttlMs, timeoutMs){
+async function fetchJSONCached(url, ttlMs, timeoutMs, fetcher){
   const rec=cacheRead(url);
   if(rec&&!cacheBypass&&Date.now()-rec.t<ttlMs) return {j:rec.j, src:'live', at:rec.t};
   try{
-    const j=await fetchJSON(url,timeoutMs);
+    const j=await (fetcher||fetchJSON)(url,timeoutMs);
     cacheWrite(url,j);
     return {j, src:'live', at:Date.now()};
   }catch(e){
@@ -153,16 +153,35 @@ async function fetchGridFields(g){
   const src=(mr.src==='cached'||wr.src==='cached')?'cached':'live';
   return {sst,wspd,wdir,src,at:Math.min(mr.at,wr.at)};
 }
-/* MUR 1-km satellite-blended SST analysis via NOAA CoastWatch ERDDAP (CORS-open).
+/* MUR 1-km satellite-blended SST analysis via NOAA CoastWatch ERDDAP.
    Preferred SST source — resolves real Gulf Stream structure that smoothed
-   NWP-analysis SST misses, especially in summer when the wall contrast is weak. */
+   NWP-analysis SST misses, especially in summer when the wall contrast is weak.
+   ERDDAP sends no CORS headers, so browser fetch() is blocked cross-origin;
+   ERDDAP's supported cross-origin path is JSONP (&.jsonp=cb). Try fetch first
+   (serves tests, and any future CORS enablement), then fall back to JSONP. */
+function murJSON(url,timeoutMs){
+  return fetchJSON(url,timeoutMs).catch(err=>{
+    // JSONP only makes sense in a real browser page served over http(s)
+    if(typeof document==='undefined'||!/^https?:$/.test(location.protocol)) throw err;
+    return new Promise((resolve,reject)=>{
+      const cb='murCb'+(Date.now()%1e7);
+      const s=document.createElement('script');
+      const to=setTimeout(()=>{cleanup(); reject(new Error('jsonp timeout'));},timeoutMs||15000);
+      function cleanup(){ clearTimeout(to); try{delete window[cb];}catch(e){} s.remove(); }
+      window[cb]=j=>{cleanup(); resolve(j);};
+      s.onerror=()=>{cleanup(); reject(new Error('jsonp load error'));};
+      s.src=url+'&.jsonp='+cb;
+      document.head.appendChild(s);
+    });
+  });
+}
 async function fetchMURGrid(){
   const stride=12; // 0.01° native × 12 ≈ 0.12°
   const url='https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.json?analysed_sst'
     +'%5B(last)%5D'
     +'%5B('+GRID.latMin+'):'+stride+':('+GRID.latMax+')%5D'
     +'%5B('+GRID.lonMin+'):'+stride+':('+GRID.lonMax+')%5D';
-  const r=await fetchJSONCached(url,CACHE_TTL.mur,15000);
+  const r=await fetchJSONCached(url,CACHE_TTL.mur,15000,murJSON);
   const j=r.j;
   const t=j.table; if(!t||!t.rows||!t.rows.length) throw new Error('no rows');
   const ci={}; t.columnNames.forEach((c,k)=>ci[c]=k);

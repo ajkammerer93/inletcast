@@ -45,6 +45,9 @@ EOF
 echo "== scoring tests =="
 node scoring-tests.mjs || fail=1
 
+echo "== front-line tests =="
+node front-tests.mjs || fail=1
+
 echo "== smoke tests =="
 node smoke.mjs || fail=1
 

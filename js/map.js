@@ -20,6 +20,19 @@ function detectFront(field){
   return front;
 }
 
+/* Line decision from the per-transect strongest steps: a solid line needs >=3
+   transects with a real step (>=0.35 °C); a weak-but-coherent field (>=3 steps
+   over 0.15 °C — typical of August, when the wall contrast is at its annual
+   minimum) still gets a dashed orientation-only line; below that, no line —
+   no line beats a made-up line. */
+function frontLine(all){
+  const strong=all.filter(f=>f.g>=0.35);
+  if(strong.length>=3) return {pts:strong, weak:false};
+  const usable=all.filter(f=>f.g>=0.15);
+  if(usable.length>=3) return {pts:usable, weak:true};
+  return null;
+}
+
 /* ---------- map overlay layers (SST raster + wind particles) ----------
    Raster interpolation + ramp approach ported from the freesurfforecast
    surf_dash repo (buildFieldRasterURL / rampColor / leaflet-velocity u,v math). */
@@ -210,11 +223,12 @@ function coastMap(parent, opts){
   }
 
   // Gulf Stream west wall — detected from the same SST field the map displays
-  let front=[];
+  let front=[], frontWeak=false;
   if(sstGrid){
     const field=transectPoints().map(p=>({...p, sst:gridSample(sstGrid,sstGrid.sst,p.lon,p.lat)}));
-    front=detectFront(field).filter(f=>f.g>=0.35); // drop noise-level gradients — no line beats a made-up line
-    if(front.length>=3){
+    const line=frontLine(detectFront(field));
+    if(line){
+      front=line.pts; frontWeak=line.weak;
       const fp=front.map(f=>({x:X(f.lon),y:Y(f.lat)}));
       let d='M'+fp[0].x.toFixed(1)+' '+fp[0].y.toFixed(1);
       for(let i=1;i<fp.length;i++){
@@ -222,14 +236,16 @@ function coastMap(parent, opts){
         d+=' Q'+fp[i-1].x.toFixed(1)+' '+fp[i-1].y.toFixed(1)+' '+mx+' '+my;
       }
       d+=' L'+fp[fp.length-1].x.toFixed(1)+' '+fp[fp.length-1].y.toFixed(1);
-      svgEl('path',{d,fill:'none',stroke:'var(--series-2)','stroke-width':2.5,'stroke-linecap':'round','stroke-linejoin':'round'},svg);
+      const pathAttrs={d,fill:'none',stroke:'var(--series-2)','stroke-width':frontWeak?2:2.5,'stroke-linecap':'round','stroke-linejoin':'round'};
+      if(frontWeak){ pathAttrs['stroke-dasharray']='6 5'; pathAttrs.opacity='0.75'; }
+      svgEl('path',pathAttrs,svg);
       front.forEach(f=>{
         const x=X(f.lon),y=Y(f.lat);
         svgEl('circle',{cx:x,cy:y,r:4,fill:'var(--series-2)',stroke:'var(--surface-1)','stroke-width':2},svg);
         const hit=svgEl('circle',{cx:x,cy:y,r:HITR,fill:'transparent',cursor:'default'},svg);
         const showFront=(ev,pin)=>{
           if(tipPinned&&!pin) return;
-          showTip(ev.clientX,ev.clientY,(f.weak?'Strongest SST front':'West wall')+' — off '+f.name,[
+          showTip(ev.clientX,ev.clientY,(frontWeak?'Weak SST front':f.weak?'Strongest SST front':'West wall')+' — off '+f.name,[
             {color:'var(--series-2)',val:'Δ '+f.g.toFixed(1)+' °C',lbl:'SST front strength'+(f.weak?' (weak)':'')},
             {val:(f.inshore*9/5+32).toFixed(0)+' °F',lbl:'inshore side'},
             {val:(f.offshore*9/5+32).toFixed(0)+' °F',lbl:'stream side'},
@@ -244,8 +260,9 @@ function coastMap(parent, opts){
       const wl=svgEl('text',{x:lp.x+10,y:lp.y-8,'font-size':10,'font-weight':600,fill:'var(--ink-2)',
         stroke:'var(--surface-1)','stroke-width':3,'paint-order':'stroke'},svg);
       // only call it the west wall when most steps are strong; a weak line is just the strongest front we found
-      const weakLine=front.filter(f=>f.weak).length>front.length/2;
-      wl.textContent=(weakLine?'Strongest SST front':'West wall')+' · '+(sstSource==='mur'?'satellite SST':sstSource==='nwp'?'NWP SST':'demo SST');
+      const weakLine=frontWeak||front.filter(f=>f.weak).length>front.length/2;
+      wl.textContent=(frontWeak?'Weak SST front — orientation only':weakLine?'Strongest SST front':'West wall')
+        +' · '+(sstSource==='mur'?'satellite SST':sstSource==='nwp'?'NWP SST':'demo SST');
     }
   }
 
@@ -397,9 +414,9 @@ function coastMap(parent, opts){
   if(sstGrid){
     const srcTxt=sstSource==='mur'?'satellite SST':sstSource==='nwp'?'NWP SST':'demo SST';
     if(front.length>=3){
-      const weakLine=front.filter(f=>f.weak).length>front.length/2;
-      el('div','wallnote',parent,(weakLine?'Strongest SST front':'Gulf Stream west wall')+' ('+srcTxt+'): '+
-        front.map(f=>'off '+f.name+' Δ '+f.g.toFixed(1)+' °C').join(', ')+'.');
+      const weakLine=frontWeak||front.filter(f=>f.weak).length>front.length/2;
+      el('div','wallnote',parent,(frontWeak?'Weak SST front, orientation only':weakLine?'Strongest SST front':'Gulf Stream west wall')
+        +' ('+srcTxt+'): '+front.map(f=>'off '+f.name+' Δ '+f.g.toFixed(1)+' °C').join(', ')+'.');
     }else{
       el('div','wallnote',parent,'No clear Gulf Stream front detected in the current '+srcTxt+' field.');
     }
