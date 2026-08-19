@@ -204,11 +204,17 @@ function synthTide(sta, start, nHours){
 }
 
 /* ---------------- load ---------------- */
-async function loadData(){
+/* Incremental: each source writes into state.data as soon as it settles (live or
+   synthetic fallback) and fires onSettle so the UI can hydrate card-by-card instead
+   of blocking on the slowest of ~24 requests. The final allSettled still gates the
+   mode badge and the fetched-at timestamp. */
+async function loadData(onSettle){
   const start=new Date(); start.setMinutes(0,0,0);
   const n=CONFIG.hoursPlanner+24;
-  const data={inlets:{}, zones:{}, tides:{}};
+  if(!state.data) state.data={inlets:{}, zones:{}, tides:{}};
+  const data=state.data;
   let liveOK=0, liveFail=0;
+  const settled=()=>{ if(onSettle) try{ onSettle(); }catch(e){} };
 
   const jobs=[];
   for(const inl of CONFIG.inlets){
@@ -218,6 +224,7 @@ async function loadData(){
         if(!m.t.length||!w.t.length) throw new Error('empty');
         data.inlets[inl.id]={marine:m, wind:w, live:true}; liveOK++;
       }catch(e){ data.inlets[inl.id]={...synthPoint('inlet'+inl.id,start,n), live:false}; liveFail++; }
+      settled();
     })());
   }
   for(const z of CONFIG.zones){
@@ -227,11 +234,13 @@ async function loadData(){
         if(!m.t.length||!w.t.length) throw new Error('empty');
         data.zones[z.id]={marine:m, wind:w, live:true}; liveOK++;
       }catch(e){ data.zones[z.id]={...synthPoint('zone'+z.id,start,n), live:false}; liveFail++; }
+      settled();
     })());
   }
   jobs.push((async()=>{
     try{ data.murGrid=await fetchMURGrid(); liveOK++; }
     catch(e){ data.murGrid=null; } // silent enhancement — NWP grid is the fallback
+    settled();
   })());
   const grid=buildGrid();
   jobs.push((async()=>{
@@ -240,6 +249,7 @@ async function loadData(){
       if(!f.sst.flat().some(v=>v!=null)) throw new Error('all null');
       data.grid={...grid, ...f, live:true}; liveOK++;
     }catch(e){ data.grid={...grid, ...demoGridFields(grid), live:false}; liveFail++; }
+    settled();
   })());
   const stations=[...new Set(CONFIG.inlets.map(i=>i.tideSta))];
   for(const sta of stations){
@@ -249,10 +259,10 @@ async function loadData(){
         if(!t.length) throw new Error('empty');
         data.tides[sta]={pts:t, live:true}; liveOK++;
       }catch(e){ data.tides[sta]={pts:synthTide(sta,start,n), live:false}; liveFail++; }
+      settled();
     })());
   }
   await Promise.allSettled(jobs);
   state.mode = liveFail===0 ? 'live' : (liveOK===0 ? 'demo' : 'mixed');
   state.fetchedAt=new Date();
-  state.data=data;
 }

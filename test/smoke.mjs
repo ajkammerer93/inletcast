@@ -191,6 +191,116 @@ await scenario('banner: dismissal persists across reloads via localStorage', asy
   second.window.close(); third.window.close();
 });
 
+await scenario('skeleton: fetches never settle -> skeleton cards render immediately', async () => {
+  // a fetch that returns a forever-pending promise: nothing settles, nothing hydrates
+  const { window, document, errors } = await loadApp({ fetchStub: () => new Promise(() => {}), settleMs: 600 });
+  noFatal(errors);
+  const skels = document.querySelectorAll('#inletCards .card.skeleton');
+  assert(skels.length >= 7, `found ${skels.length} skeleton cards, want >= 7`);
+  assert(/Loading forecast/.test(skels[0].textContent), 'skeleton card carries a loading note');
+  const badge = document.getElementById('modeBadge');
+  assert(/loading/i.test(badge.textContent), 'badge still says Loading while nothing settles');
+  window.close();
+});
+
+await scenario('incremental hydration: cards fill in while the slow grid fetch is still pending', async () => {
+  const base = makeFetchStub();
+  const stub = (url) => {
+    const s = String(url);
+    // hold the map-overlay grid + MUR requests open forever; point + tide fetches resolve
+    if (s.includes('sea_surface_temperature') || s.includes('coastwatch')) return new Promise(() => {});
+    return base(url);
+  };
+  const { window, document, errors } = await loadApp({ fetchStub: stub, settleMs: 2000 });
+  noFatal(errors);
+  const skels = document.querySelectorAll('#inletCards .card.skeleton');
+  assert(skels.length === 0, `${skels.length} cards still skeleton after point sources settled`);
+  const cards = [...document.querySelectorAll('#inletCards .card')];
+  assert(cards.length >= 7, `found ${cards.length} hydrated cards, want >= 7`);
+  for (const c of cards.slice(0, 3)) assert(/Seas/.test(c.textContent), 'hydrated card shows current seas');
+  // load has NOT finished — cards must not have waited on the slowest request
+  const badge = document.getElementById('modeBadge');
+  assert(/loading/i.test(badge.textContent), 'badge still loading while the grid fetch hangs');
+  window.close();
+});
+
+await scenario('hash routing: #/inlet/<id> deep link, back to #/inlets, lazy #/offshore render', async () => {
+  const { window, document, errors } = await loadApp({ fetchStub: makeFetchStub() });
+  noFatal(errors);
+  const firstId = 'newtopsail';
+  window.location.hash = '#/inlet/' + firstId;
+  window.dispatchEvent(new window.Event('hashchange'));
+  const detail = document.getElementById('view-detail');
+  assert(detail.classList.contains('active'), 'hash #/inlet/<id> activates the detail view');
+  assert(/New Topsail/.test(detail.textContent), 'detail view shows the routed inlet');
+  assert(/New Topsail Inlet — InletCast/.test(document.title), `document.title is share-worthy, got "${document.title}"`);
+  // browser back (hash restored) returns to the inlets view
+  window.location.hash = '#/inlets';
+  window.dispatchEvent(new window.Event('hashchange'));
+  assert(document.getElementById('view-inlets').classList.contains('active'), 'back to #/inlets reactivates the list');
+  assert(!detail.classList.contains('active'), 'detail view deactivates on back');
+  // hidden-at-boot views render on first activation via the hash
+  window.location.hash = '#/offshore';
+  window.dispatchEvent(new window.Event('hashchange'));
+  assert(document.getElementById('view-offshore').classList.contains('active'), '#/offshore activates the planner');
+  assert(document.getElementById('offshoreBody').textContent.trim().length > 0, 'planner rendered on first activation');
+  window.close();
+});
+
+await scenario('staleness: old data flips the badge amber; tapping it refreshes', async () => {
+  const { window, document, errors } = await loadApp({ fetchStub: makeFetchStub() });
+  noFatal(errors);
+  window.eval('state.fetchedAt = new Date(Date.now() - 2 * 3600e3);');
+  window.eval('updateModeBadge();');
+  const badge = document.getElementById('modeBadge');
+  assert(badge.classList.contains('stale'), 'badge carries the stale class');
+  assert(/stale/i.test(badge.textContent) && /tap to refresh/i.test(badge.textContent), `badge says "${badge.textContent}"`);
+  badge.click(); // stale badge is a refresh button
+  await new Promise((r) => setTimeout(r, 500));
+  assert(/live data/i.test(badge.textContent), `badge after refresh says "${badge.textContent}"`);
+  assert(!badge.classList.contains('stale'), 'stale class clears after refresh');
+  // fresh badge click opens the source list, which always carries a refresh button
+  badge.click();
+  const src = document.getElementById('modeSources');
+  assert(src && !src.hasAttribute('hidden'), 'fresh badge click opens the source list');
+  assert(/Refresh data now/.test(src.textContent), 'source list carries the always-available refresh button');
+  window.close();
+});
+
+await scenario('theme: choice persists to localStorage and applies before first paint', async () => {
+  const first = await loadApp({ fetchStub: makeFetchStub() });
+  noFatal(first.errors);
+  first.document.getElementById('themeBtn').click();
+  const chosen = first.document.documentElement.getAttribute('data-theme');
+  assert(chosen === 'dark' || chosen === 'light', `toggle set data-theme="${chosen}"`);
+  assert(first.window.localStorage.getItem('inletcast_theme') === chosen, 'theme choice written to localStorage');
+  first.window.close();
+  // returning visitor: the inline pre-paint script applies the stored theme
+  const second = await loadApp({ fetchStub: makeFetchStub(), localStorageSeed: { inletcast_theme: chosen } });
+  assert(second.document.documentElement.getAttribute('data-theme') === chosen, 'stored theme applied on reload');
+  second.window.close();
+});
+
+await scenario('point-of-use help: status chip opens the class-definition popover; boat microcopy shown', async () => {
+  const { window, document, errors } = await loadApp({ fetchStub: makeFetchStub() });
+  noFatal(errors);
+  const note = document.getElementById('boatNote');
+  assert(note && /Scored for a 23–27 ft boat/.test(note.textContent), `boat note says "${note && note.textContent}"`);
+  assert(note.querySelector('button'), 'boat note carries a change control');
+  const chip = document.querySelector('#inletCards .card .chip');
+  assert(chip, 'card carries a status chip');
+  chip.click();
+  const pop = document.querySelector('.clspop');
+  assert(pop && pop.style.display === 'block', 'chip click opens the class popover');
+  for (const word of ['Favorable', 'Marginal', 'Rough', 'Hazardous']) {
+    assert(pop.textContent.includes(word), `popover defines ${word}`);
+  }
+  assert(/never a statement/.test(pop.textContent), 'popover carries the no-go-signal caveat');
+  // the chip click must not have navigated into the detail view
+  assert(document.getElementById('view-inlets').classList.contains('active'), 'chip click does not open the card');
+  window.close();
+});
+
 const failed = results.filter((r) => !r.ok);
 console.log(failed.length ? `\n${failed.length}/${results.length} scenarios FAILED` : `\nAll ${results.length} scenarios passed`);
 process.exit(failed.length ? 1 : 0);

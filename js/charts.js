@@ -3,6 +3,24 @@
 
 const tooltip=$('#tooltip');
 
+/* tap-to-pin: pointerdown on a chart/strip/map value pins the tooltip until the next
+   tap elsewhere — touch users get the same readouts hover users do. */
+let tipPinned=false, tipPinEvent=null;
+function pinTip(ev){ tipPinned=true; tipPinEvent=ev; }
+function unpinTip(){ tipPinned=false; tipPinEvent=null; tooltip.style.display='none'; }
+document.addEventListener('pointerdown',ev=>{
+  if(ev===tipPinEvent) return;               // the tap that just pinned this tip
+  if(tipPinned) unpinTip();
+  if(typeof state!=='undefined') state.armedMarker=null;   // two-tap map markers disarm on any other tap
+  // pinned map cursor readouts clear when the tap lands outside their map
+  $$('.mapreadout').forEach(r=>{
+    if(r.dataset.pin==='1'&&!(r.parentElement&&r.parentElement.contains(ev.target))){ r.dataset.pin=''; r.style.display='none'; }
+  });
+  // status-class popover dismisses on any tap outside it
+  const cp=document.querySelector('.clspop');
+  if(cp&&cp.style.display==='block'&&!cp.contains(ev.target)) cp.style.display='none';
+});
+
 function showTip(x,y,title,rows){
   tooltip.textContent='';
   el('div','tt-title',tooltip,title);
@@ -19,7 +37,7 @@ function showTip(x,y,title,rows){
   if(top<8) top=y+14;
   tooltip.style.left=left+'px'; tooltip.style.top=top+'px';
 }
-function hideTip(){tooltip.style.display='none';}
+function hideTip(force){ if(tipPinned&&!force) return; tooltip.style.display='none'; }
 
 /* ---------- generic multi-series line chart (one axis) ---------- */
 function lineChart(parent, opt){
@@ -79,10 +97,11 @@ function lineChart(parent, opt){
   // crosshair + tooltip
   const cross=svgEl('line',{x1:0,x2:0,y1:padT,y2:H-padB,stroke:'var(--axis)','stroke-width':1,visibility:'hidden'},svg);
   const dots=opt.series.map(s=>svgEl('circle',{r:4,fill:s.color,stroke:'var(--surface-1)','stroke-width':2,visibility:'hidden'},svg));
-  const onMove=(ev)=>{
+  const onMove=(ev,pin)=>{
+    if(tipPinned&&!pin) return;              // a pinned readout holds until the next tap
     const r=svg.getBoundingClientRect();
     const px=(ev.clientX-r.left)*(W/r.width);
-    if(px<padL||px>W-padR){hideTip();cross.setAttribute('visibility','hidden');dots.forEach(d=>d.setAttribute('visibility','hidden'));return;}
+    if(px<padL||px>W-padR){if(pin)unpinTip();hideTip();cross.setAttribute('visibility','hidden');dots.forEach(d=>d.setAttribute('visibility','hidden'));return;}
     const frac=(px-padL)/plotW; const tt=new Date(t0.getTime()+frac*(t1-t0));
     const s0=opt.series[0];
     const idx=clamp(Math.round((tt-s0.t[0])/(s0.t[1]-s0.t[0])),0,s0.t.length-1);
@@ -97,9 +116,11 @@ function lineChart(parent, opt){
     });
     const d=s0.t[idx];
     showTip(ev.clientX,ev.clientY,dayLabel(d)+' '+hourLabel(d),rows);
+    if(pin) pinTip(ev);
   };
-  svg.addEventListener('pointermove',onMove);
-  svg.addEventListener('pointerleave',()=>{hideTip();cross.setAttribute('visibility','hidden');dots.forEach(d=>d.setAttribute('visibility','hidden'));});
+  svg.addEventListener('pointermove',ev=>onMove(ev,false));
+  svg.addEventListener('pointerdown',ev=>onMove(ev,true));   // tap pins the crosshair + values
+  svg.addEventListener('pointerleave',()=>{if(tipPinned)return;hideTip();cross.setAttribute('visibility','hidden');dots.forEach(d=>d.setAttribute('visibility','hidden'));});
   return wrap;
 }
 
@@ -130,7 +151,8 @@ function statusStrip(parent, hours, opts){
         fill:(r.cls==='warn'||r.cls==='serious')?'#3a2a00':'#fff'},svg);
       tx.textContent=meta.ic+' '+meta.label;
     }
-    rect.addEventListener('pointermove',ev=>{
+    const showRun=(ev,pin)=>{
+      if(tipPinned&&!pin) return;
       const mid=r.hrs[Math.floor(r.hrs.length/2)];
       showTip(ev.clientX,ev.clientY,timeRangeLabel(r.from,new Date(r.to.getTime()+36e5)),[
         {color:meta.color,val:meta.ic+' '+meta.label,lbl:''},
@@ -138,8 +160,12 @@ function statusStrip(parent, hours, opts){
         {val:mid.wind+' kn',lbl:'wind '+compass(mid.wdir??0)},
         {val:mid.conf,lbl:'model agreement'},
       ]);
-    });
-    rect.addEventListener('pointerleave',hideTip);
+      if(pin) pinTip(ev);
+    };
+    rect.addEventListener('pointermove',ev=>showRun(ev,false));
+    rect.addEventListener('pointerdown',ev=>showRun(ev,true));  // tap pins the run details
+    rect.addEventListener('click',ev=>ev.stopPropagation());    // a strip tap reads values; it never opens the card
+    rect.addEventListener('pointerleave',()=>hideTip());
   });
   // day labels
   const dayStart=new Date(t0); dayStart.setHours(0,0,0,0);

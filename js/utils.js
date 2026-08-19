@@ -17,6 +17,9 @@ function timeRangeLabel(a,b){
 }
 function ymd(d){return d.getFullYear()+''+pad2(d.getMonth()+1)+pad2(d.getDate());}
 
+// touch-first environment? drives tap-to-pin defaults (table visible, two-tap markers)
+function isCoarse(){ try{ return !!(window.matchMedia&&window.matchMedia('(pointer: coarse)').matches); }catch(e){ return false; } }
+
 const $=(s,el)=>(el||document).querySelector(s);
 const $$=(s,el)=>[...(el||document).querySelectorAll(s)];
 const SVGNS='http://www.w3.org/2000/svg';

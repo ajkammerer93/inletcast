@@ -150,12 +150,18 @@ function scoreAll(){
   state.scored=scored;
 }
 
+/* desc wording is shared verbatim by the Method tab and the status-chip popover */
 const CLS_META={
-  good:{label:'Favorable', ic:'✓', color:'var(--st-good)'},
-  warn:{label:'Marginal', ic:'!', color:'var(--st-warn)'},
-  serious:{label:'Rough', ic:'✕', color:'var(--st-serious)'},
-  critical:{label:'Hazardous', ic:'⚠', color:'var(--st-critical)'},
+  good:{label:'Favorable', ic:'✓', color:'var(--st-good)',
+    desc:'modeled seas, wind, and tide below the thresholds this tool uses for this size class.'},
+  warn:{label:'Marginal', ic:'!', color:'var(--st-warn)',
+    desc:'one or more thresholds approached or exceeded — expect discomfort and timing sensitivity.'},
+  serious:{label:'Rough', ic:'✕', color:'var(--st-serious)',
+    desc:'thresholds clearly exceeded; most operators wait for the next window.'},
+  critical:{label:'Hazardous', ic:'⚠', color:'var(--st-critical)',
+    desc:'conditions at or beyond small-craft-advisory character at the inlet.'},
 };
+const CLS_NOTE='The labels describe modeled conditions against fixed thresholds — never a statement that any boat or operator should go.';
 function clsRank(c){return {good:0,warn:1,serious:2,critical:3}[c];}
 
 function findWindows(hours, horizon){

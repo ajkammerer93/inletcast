@@ -1,13 +1,51 @@
 'use strict';
 /* views.js — all render* functions and view plumbing. */
 
-/* ---------- views ---------- */
+/* ---------- views & routing ----------
+   Hash routes: #/inlets, #/offshore, #/models, #/method, #/inlet/<id> (plus the
+   no-JS #view-terms fragment). setView applies the view, renders it lazily (hidden
+   views have zero width — charts must only draw while visible), and syncs the hash
+   so browser back works and per-inlet links are shareable. */
+function hashFor(v){
+  return v==='detail' ? '#/inlet/'+state.detailInlet : v==='terms' ? '#view-terms' : '#/'+v;
+}
+function titleFor(v){
+  const base='InletCast';
+  if(v==='detail'){ const inl=CONFIG.inlets.find(i=>i.id===state.detailInlet); if(inl) return inl.name+' — '+base; }
+  const t={offshore:'Offshore planner',models:'Model agreement',method:'How InletCast works',terms:'Terms of Use'}[v];
+  return t?t+' — '+base:base+' — NC Inlet Condition Windows (Prototype)';
+}
 function setView(v){
   state.view=v;
   $$('.view').forEach(x=>x.classList.remove('active'));
   $('#view-'+(v==='detail'?'detail':v)).classList.add('active');
   $$('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.view===v||(v==='detail'&&b.dataset.view==='inlets')));
+  renderActiveView();           // after the class flip, so charts measure a visible container
+  document.title=titleFor(v);
+  const h=hashFor(v);
+  // don't force '#/inlets' onto a clean URL — keeps the first back press from being a no-op
+  if(location.hash!==h&&!(h==='#/inlets'&&location.hash==='')){ try{ location.hash=h; }catch(e){} }
   window.scrollTo({top:0});
+}
+// parse the current hash and apply it (boot, hashchange, browser back)
+function applyRoute(){
+  const h=location.hash||'';
+  const m=h.match(/^#\/inlet\/([\w-]+)$/);
+  if(m&&CONFIG.inlets.some(i=>i.id===m[1])){ state.detailInlet=m[1]; setView('detail'); }
+  else if(h==='#/offshore') setView('offshore');
+  else if(h==='#/models') setView('models');
+  else if(h==='#/method') setView('method');
+  else if(h==='#view-terms'||h==='#/terms') setView('terms');
+  else setView('inlets');
+}
+// render only what is on screen; hidden views re-render on their next activation
+function renderActiveView(){
+  const v=state.view;
+  if(v==='inlets') renderInletCards();
+  else if(v==='detail') renderDetail();
+  else if(v==='offshore') renderOffshore();
+  else if(v==='models') renderModels();
+  else if(v==='method') renderMethod();
 }
 
 function chipFor(cls, extra){
@@ -15,7 +53,38 @@ function chipFor(cls, extra){
   const c=document.createElement('span');
   c.className='chip '+cls;
   c.textContent=m.ic+' '+m.label+(extra?(' '+extra):'');
+  // every status chip explains itself: tap for the four class definitions
+  c.title='What do these classes mean? Tap for definitions';
+  c.style.cursor='pointer';
+  c.addEventListener('click',e=>{e.stopPropagation();showClassPopover(e.clientX,e.clientY);});
   return c;
+}
+// point-of-use definitions of the four classes — same wording the Method tab uses (CLS_META)
+function showClassPopover(x,y){
+  let pop=document.querySelector('.clspop');
+  if(!pop) pop=el('div','clspop',document.body);
+  pop.textContent='';
+  el('h5','',pop,'What the classes mean');
+  for(const k of ['good','warn','serious','critical']){
+    const m=CLS_META[k];
+    const row=el('div','clsrow',pop);
+    el('span','chip '+k,row,m.ic+' '+m.label);
+    el('span','clsdef',row,m.desc);
+  }
+  el('p','clsnote',pop,CLS_NOTE+' Scored for a '+(CONFIG.boats[state.boatKey]||'')+' boat.');
+  pop.style.display='block';
+  const w=pop.offsetWidth||280, hgt=pop.offsetHeight||200;
+  const iw=window.innerWidth||800, ih=window.innerHeight||600;
+  pop.style.left=Math.max(8,Math.min(x-20,iw-w-8))+'px';
+  pop.style.top=Math.max(8,(y+hgt+20>ih?y-hgt-12:y+12))+'px';
+}
+// "scored for [boat class] — change" microcopy under the view title
+function updateBoatNote(){
+  const n=$('#boatNote'); if(!n) return;
+  n.textContent='';
+  n.append('Scored for a '+(CONFIG.boats[state.boatKey]||'')+' boat — ');
+  const b=el('button','linkbtn',n,'change');
+  b.addEventListener('click',()=>{const s=$('#boatSel'); if(s){s.focus(); s.scrollIntoView&&s.scrollIntoView({block:'nearest'});}});
 }
 // unmissable per-source synthetic-data marker (rendered wherever a live:false source feeds the UI)
 function simChip(parent){
@@ -47,10 +116,20 @@ function renderInletCards(){
     coastMap(mp);
     stripLegend(mp).style.padding='6px 4px 4px';
   }
+  updateBoatNote();
   const grid=$('#inletCards'); grid.textContent='';
   const inlets=CONFIG.inlets.filter(i=>state.area==='all'||i.area===state.area);
   for(const inl of inlets){
-    const hours=state.scored.inlets[inl.id]; if(!hours||!hours.length) continue;
+    const hours=state.scored.inlets[inl.id];
+    // skeleton card until this inlet's sources settle — the grid appears instantly at boot
+    if(!hours||!hours.length){
+      const sk=el('div','card skeleton',grid);
+      const h3s=el('h3','',sk); h3s.textContent=inl.name; el('span','area',h3s,inl.area);
+      el('div','skelbar w60',sk);
+      el('div','skelbar strip',sk);
+      el('div','skelnote',sk,'Loading forecast…');
+      continue;
+    }
     const now=hours[0];
     const card=el('div','card',grid);
     card.setAttribute('role','button'); card.tabIndex=0;
@@ -73,7 +152,7 @@ function renderInletCards(){
     else if(now.cls==='good'&&wins.length){ nw.textContent='Scores favorable now — holds until '; const b=el('strong','',nw,timeRangeLabel(wins[0].from,new Date(wins[0].to.getTime()+36e5)).split('–').pop()); }
     else if(wins.length){ nw.textContent='Next window: '; el('strong','',nw,timeRangeLabel(wins[0].from,new Date(wins[0].to.getTime()+36e5))); }
     else nw.textContent='No favorable window in the next 72 h for this boat size.';
-    const open=()=>{state.detailInlet=inl.id; renderDetail(); setView('detail');};
+    const open=()=>{state.detailInlet=inl.id; setView('detail');};
     card.addEventListener('click',open);
     card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});
   }
@@ -85,6 +164,15 @@ function renderDetail(){
   const hours=state.scored.inlets[inl.id];
   const back=el('button','backbtn',view,'← All inlets');
   back.addEventListener('click',()=>setView('inlets'));
+  // deep link opened before this inlet's sources settled — hold a skeleton, hydration re-renders
+  if(!state.data.inlets[inl.id]||!hours||!hours.length){
+    const headL=el('div','detailhead',view);
+    el('h2','',headL,inl.name);
+    const pl=el('div','panel',view);
+    el('div','skelbar w60',pl); el('div','skelbar strip',pl);
+    el('p','skelnote',pl,'Loading forecast…');
+    return;
+  }
   const head=el('div','detailhead',view);
   const h2=el('h2','',head,inl.name);
   head.appendChild(chipFor(hours[0].cls));
@@ -174,9 +262,11 @@ function renderDetail(){
   const p5=el('div','panel',view);
   const ph5=el('div','panelhead',p5); el('h4','',ph5,'Hourly detail');
   el('span','spacer',ph5);
-  const tbtn=el('button','iconbtn',ph5, state.showTable[inl.id]?'Hide table':'Show table');
-  tbtn.addEventListener('click',()=>{state.showTable[inl.id]=!state.showTable[inl.id];renderDetail();});
-  if(state.showTable[inl.id]){
+  // touch devices default the table open — it is the no-hover twin of every chart value
+  const showT=state.showTable[inl.id]!=null?state.showTable[inl.id]:isCoarse();
+  const tbtn=el('button','iconbtn',ph5, showT?'Hide table':'Show table');
+  tbtn.addEventListener('click',()=>{state.showTable[inl.id]=!showT;renderDetail();});
+  if(showT){
     const wrapT=el('div','tablewrap',p5);
     const tb=el('table','data',wrapT);
     const thr=el('tr','',el('thead','',tb));
@@ -235,6 +325,8 @@ function renderOffshore(){
   const inl=CONFIG.inlets.find(i=>i.id===depSel.value);
   const zone=CONFIG.zones.find(z=>z.id===zoneSel.value);
   const zd=state.data.zones[zone.id];
+  // sources still settling (view opened mid-load) — hydration re-renders when they land
+  if(!zd||!state.data.inlets[inl.id]){ el('p','viewsub',body,'Loading forecast data…'); return; }
   // score the zone point hours through the shared core (tide/bar terms off, wind-against-Stream on)
   const zoneHours=[];
   for(let i=0;i<CONFIG.hoursPlanner;i++){
@@ -316,6 +408,8 @@ function renderModels(){
   }
   const inl=CONFIG.inlets.find(i=>i.id===sel.value)||CONFIG.inlets[0];
   const d=state.data.inlets[inl.id];
+  // source still settling (view opened mid-load) — hydration re-renders when it lands
+  if(!d){ el('p','viewsub',body,'Loading forecast data…'); return; }
   const n=CONFIG.hoursPlanner;
   const i0=d.marine.t.findIndex(t=>t>=state.scored.start);
   const mt=d.marine.t.slice(i0,i0+n);
@@ -364,7 +458,8 @@ function renderMethod(){
   add(null,'InletCast is a prototype by Ghosttree Technical Solutions, LLC — a working demonstration of inlet-scale condition guidance for the Southeast NC coast, built by a forecaster who runs these inlets.');
   add('Data','Wave guidance comes from two independent operational wave models (NOAA GFS-Wave and ECMWF WAM) at a nearshore point off each inlet, via the Open-Meteo API (weather data by Open-Meteo.com, CC BY 4.0 — link in the footer). Winds are GFS and ECMWF 10 m fields. Tides are NOAA CO-OPS harmonic predictions from the nearest reference station. When live sources are unreachable, the app runs on clearly-labeled synthetic demo data so you can still explore the interface.');
   add('The score','Each hour gets a 0–100 score built from four transparent penalties: sea state (height and short-period steepness), wind (speed, gusts, onshore component), a bar-breaking term — a shoaled-height proxy that grows with swell period and each inlet’s shoaling factor, because long-period energy is what shoals, jacks, and breaks on an ebb delta — and the tide term: ebb strength multiplied by how directly the swell opposes the channel, weighted by each inlet’s shoaling behavior. Swell direction and period come from the models’ swell partition when available, so wind chop cannot hide an opposed ground swell. The ebb strength is deliberately widened about ±90 minutes, since the tide stations are timing proxies. On top of the score, hard overrides force Hazardous whenever the raw sea height can break a shoal bar — regardless of boat class, which scales comfort, never a breaking bar — and a strong ebb against a long-period swell over a shoal bar forces at least Rough. Nothing is a black box: the "why" panel shows every penalty.');
-  add('What the classes mean','Favorable (✓): modeled seas, wind, and tide below the thresholds this tool uses for this size class. Marginal (!): one or more thresholds approached or exceeded — expect discomfort and timing sensitivity. Rough (✕): thresholds clearly exceeded; most operators wait for the next window. Hazardous (⚠): conditions at or beyond small-craft-advisory character at the inlet. The labels describe modeled conditions against fixed thresholds — never a statement that any boat or operator should go.');
+  // single-sourced from CLS_META so the status-chip popover and this paragraph never drift
+  add('What the classes mean',['good','warn','serious','critical'].map(k=>{const m=CLS_META[k];return m.label+' ('+m.ic+'): '+m.desc;}).join(' ')+' '+CLS_NOTE);
   add('What this prototype does not yet do','No inlet-specific bathymetry or surf-zone wave transformation (the production version applies a per-inlet shoaling model tuned against buoy and camera verification); no real-time buoy assimilation; no USACE survey ingestion; tide stations are nearest-reference proxies for some inlets; no current predictions at the inlet mouth; wind against the Stream is only a crude opposing-wind heuristic, not a current or eddy model; no convection or thunderstorm input for the afternoon return legs. Every one of these is on the roadmap — and the scoring will be verified publicly against buoy observations, the standard way operational marine models are verified.');
   add('Map layers','The SST fill prefers the MUR 1-km satellite-blended SST analysis (NASA/JPL, served by NOAA CoastWatch) — cloud-tolerant, because it blends many satellite passes, but smoother than single-pass imagery — and falls back to smoothed NWP-model SST, then labeled demo data, if unreachable. The legend shows the analysis date and age when available. Wind streamlines are sampled from NWP 10 m winds on a grid across Onslow Bay, bilinearly interpolated; the particle animation follows the interpolated wind exactly, in the style of the freesurfforecast swell map. Toggle layers with the SST / Wind buttons; the cursor readout at the bottom-left gives exact interpolated values. Note that in mid-summer the true SST contrast across the west wall is at its annual minimum — a faint August wall is the ocean, not a bug — which is why chlorophyll and altimetry are the planned complements.');
   add('The Gulf Stream line','The orange front line on the map is detected live from the same SST field the map displays — the MUR 1-km satellite-blended analysis when it is reachable, otherwise NWP-model SST. We sample that field along five cross-shelf transects, place a point at the strongest temperature step on each line, and connect them. When the steps are strong the line is a fair read on the west wall; when they are weak the map labels it "strongest SST front" instead, because a blended analysis can smear a faint summer wall. On the NWP fallback (~25 km analysis) it is good enough to see whether the stream is riding in or pushed offshore, not good enough to find a finger or an eddy edge. Production versions would blend single-pass satellite SST (GOES, VIIRS) and ocean model output (RTOFS) for chart-service-grade edges. Treat it as orientation, not navigation.');
@@ -374,17 +469,18 @@ function renderMethod(){
 
 function renderAll(){
   scoreAll();
-  renderInletCards();
-  if(state.view==='detail') renderDetail();
-  renderOffshore();
-  renderModels();
-  renderMethod();
+  renderActiveView();
+  renderMethod(); // static text, no sizing — safe to build eagerly
 }
 function updateModeBadge(){
   const b=$('#modeBadge'), t=$('#modeText');
   b.classList.toggle('live',state.mode==='live');
   const time=state.fetchedAt?state.fetchedAt.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):'';
-  t.textContent = state.mode==='live' ? 'Live data · '+time
+  // past the hard threshold the badge turns amber and becomes a one-tap refresh
+  const stale=state.fetchedAt&&(Date.now()-state.fetchedAt.getTime())>STALE_HARD_MS;
+  b.classList.toggle('stale',!!stale);
+  t.textContent = stale ? 'Stale · fetched '+time+' — tap to refresh'
+    : state.mode==='live' ? 'Live data · '+time
     : state.mode==='mixed' ? 'Partial live · '+time
     : 'Demo data (offline sample)';
   // source breakdown dropdown (opened by clicking the badge)
@@ -400,6 +496,9 @@ function updateModeBadge(){
     el('h5','',p,'Data sources');
     el('p','',p,state.mode==='live'?'All sources live.':'Source status unavailable.');
   }
+  // refresh is always one tap away via the badge dropdown
+  const rb=el('button','iconbtn refreshbtn',p,'↻ Refresh data now');
+  rb.addEventListener('click',()=>{toggleModeSources();refreshData();});
 }
 function toggleModeSources(){
   const b=$('#modeBadge'), p=$('#modeSources');

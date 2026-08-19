@@ -13,6 +13,12 @@
 <meta name="theme-color" content="#2a78d6">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232a78d6'/%3E%3Cpath d='M8 40c6-8 10-8 16 0s10 8 16 0 10-8 16 0' stroke='white' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3Cpath d='M8 52c6-8 10-8 16 0s10 8 16 0 10-8 16 0' stroke='white' stroke-width='5' fill='none' stroke-linecap='round' opacity='.55'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/styles.css">
+<script>
+/* pre-paint theme apply: reads the persisted choice before first render so the page
+   never flashes the wrong theme. Deliberately trivial and inline — if a CSP is added
+   later this needs a hash/nonce (or moving into a tiny external file). */
+try{var t=localStorage.getItem('inletcast_theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+</script>
 </head>
 <body>
 <header class="app">
@@ -57,6 +63,7 @@
   <section class="view active" id="view-inlets">
     <h2 class="viewtitle">Inlet condition windows — next 72 hours</h2>
     <p class="viewsub" id="inletsSub">Crossing-condition outlook for Southeast NC inlets, scored from wave, wind, and tide-phase guidance.</p>
+    <p class="viewsub boatnote" id="boatNote"></p>
     <div class="panel mappanel" id="coastPanel"></div>
     <div class="cardgrid" id="inletCards"></div>
   </section>

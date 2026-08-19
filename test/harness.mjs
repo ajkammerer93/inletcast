@@ -57,6 +57,14 @@ export async function loadApp({ fetchStub, beforeBoot, localStorageSeed, settleM
     virtualConsole: vc,
     beforeParse(window) {
       window.fetch = fetchStub;
+      window.scrollTo = () => {}; // jsdom has no layout; the app scrolls on view changes
+      // jsdom ships no matchMedia; provide the browser API shape with matches:false
+      if (typeof window.matchMedia !== 'function') {
+        window.matchMedia = (q) => ({
+          matches: false, media: String(q),
+          addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent() { return false; },
+        });
+      }
       window.HTMLCanvasElement.prototype.getContext = function () { return fakeCanvasContext(this); };
       window.HTMLCanvasElement.prototype.toDataURL = () => 'data:image/png;base64,';
       // jsdom has no layout: give visible elements a plausible width for chart sizing

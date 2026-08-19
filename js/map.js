@@ -133,10 +133,13 @@ function startWindParticles(canvas, g, proj){
 function coastMap(parent, opts){
   // opts: {route:{inletId, zoneId}} — when set, draws departure→zone route and makes markers set the planner selects
   const B=MAPDATA.bounds;
-  const W=640;
   const aspect=((B.lonMax-B.lonMin)*Math.cos(34.2*Math.PI/180))/(B.latMax-B.latMin);
-  const H=Math.round(W/aspect);
   const wrap=el('div','chart',parent);
+  // size the viewBox from the rendered container so 1 SVG unit ≈ 1 CSS px — labels
+  // stay legible on phones instead of a fixed 640-unit viewBox scaled down
+  const W=Math.max(320, wrap.clientWidth||parent.clientWidth||640);
+  const H=Math.round(W/aspect);
+  const HITR=22; // marker hit radius in (≈px) units — ~44 px effective touch target
   const svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',role:'img','aria-label':'Map of Southeast North Carolina inlets'},wrap);
   svg.style.overflow='hidden'; svg.style.borderRadius='10px';
   const X=lon=>(lon-B.lonMin)/(B.lonMax-B.lonMin)*W;
@@ -211,13 +214,19 @@ function coastMap(parent, opts){
       front.forEach(f=>{
         const x=X(f.lon),y=Y(f.lat);
         svgEl('circle',{cx:x,cy:y,r:4,fill:'var(--series-2)',stroke:'var(--surface-1)','stroke-width':2},svg);
-        const hit=svgEl('circle',{cx:x,cy:y,r:13,fill:'transparent',cursor:'default'},svg);
-        hit.addEventListener('pointermove',ev=>showTip(ev.clientX,ev.clientY,(f.weak?'Strongest SST front':'West wall')+' — off '+f.name,[
-          {color:'var(--series-2)',val:'Δ '+f.g.toFixed(1)+' °C',lbl:'SST front strength'+(f.weak?' (weak)':'')},
-          {val:(f.inshore*9/5+32).toFixed(0)+' °F',lbl:'inshore side'},
-          {val:(f.offshore*9/5+32).toFixed(0)+' °F',lbl:'stream side'},
-        ]));
-        hit.addEventListener('pointerleave',hideTip);
+        const hit=svgEl('circle',{cx:x,cy:y,r:HITR,fill:'transparent',cursor:'default'},svg);
+        const showFront=(ev,pin)=>{
+          if(tipPinned&&!pin) return;
+          showTip(ev.clientX,ev.clientY,(f.weak?'Strongest SST front':'West wall')+' — off '+f.name,[
+            {color:'var(--series-2)',val:'Δ '+f.g.toFixed(1)+' °C',lbl:'SST front strength'+(f.weak?' (weak)':'')},
+            {val:(f.inshore*9/5+32).toFixed(0)+' °F',lbl:'inshore side'},
+            {val:(f.offshore*9/5+32).toFixed(0)+' °F',lbl:'stream side'},
+          ]);
+          if(pin) pinTip(ev);
+        };
+        hit.addEventListener('pointermove',ev=>showFront(ev,false));
+        hit.addEventListener('pointerdown',ev=>showFront(ev,true));
+        hit.addEventListener('pointerleave',()=>hideTip());
       });
       const lp=fp[Math.min(1,fp.length-1)];
       const wl=svgEl('text',{x:lp.x+10,y:lp.y-8,'font-size':10,'font-weight':600,fill:'var(--ink-2)',
@@ -239,27 +248,34 @@ function coastMap(parent, opts){
     const zt=svgEl('text',{x:x+zl.dx,y:y+zl.dy,'text-anchor':zl.anchor,'font-size':10,'font-weight':600,fill:'var(--ink-2)',
       stroke:'var(--surface-1)','stroke-width':3,'paint-order':'stroke'},svg);
     zt.textContent=zl.text;
-    const hit=svgEl('circle',{cx:x,cy:y,r:16,fill:'transparent',cursor:'pointer'},svg);
-    hit.addEventListener('pointermove',ev=>{
+    const hit=svgEl('circle',{cx:x,cy:y,r:HITR,fill:'transparent',cursor:'pointer'},svg);
+    const showZone=(ev,pin)=>{
+      if(tipPinned&&!pin) return;
       const rows=[{val:'≈ '+z.run_nm+' nm run',lbl:''}];
       if(sstGrid){
         const s=gridSample(sstGrid,sstGrid.sst,z.lon,z.lat);
         if(s!=null) rows.push({val:(s*9/5+32).toFixed(0)+' °F',lbl:'SST ('+(sstSource==='mur'?'satellite':sstSource.toUpperCase())+')'});
       }
       showTip(ev.clientX,ev.clientY,z.name,rows);
-    });
-    hit.addEventListener('pointerleave',hideTip);
+      if(pin) pinTip(ev);
+    };
+    hit.addEventListener('pointermove',ev=>showZone(ev,false));
+    hit.addEventListener('pointerdown',ev=>showZone(ev,true));
+    hit.addEventListener('pointerleave',()=>hideTip());
     hit.addEventListener('click',()=>{
+      // touch: first tap shows the pinned info, second tap activates
+      if(isCoarse()&&state.armedMarker!=='zone:'+z.id){ state.armedMarker='zone:'+z.id; return; }
+      state.armedMarker=null; hideTip(true);
       if(opts&&opts.route){ $('#zoneSel').value=z.id; renderOffshore(); }
       else setView('offshore');
     });
   }
 
-  // inlet markers, colored by current condition class
+  // inlet markers, colored by current condition class (neutral grey until data lands)
   for(const inl of CONFIG.inlets){
     const hours=state.scored.inlets[inl.id];
-    const cls=hours&&hours.length?hours[0].cls:'warn';
-    const meta=CLS_META[cls];
+    const hasData=!!(hours&&hours.length);
+    const meta=hasData?CLS_META[hours[0].cls]:{ic:'…',label:'Loading',color:'var(--axis)'};
     const x=X(inl.lon),y=Y(inl.lat);
     const sel=opts&&opts.route&&opts.route.inletId===inl.id;
     if(sel) svgEl('circle',{cx:x,cy:y,r:11,fill:'none',stroke:'var(--accent)','stroke-width':2},svg);
@@ -269,20 +285,26 @@ function coastMap(parent, opts){
     const tx=svgEl('text',{x:x+ldx,y:y+lb.dy+3,'text-anchor':lb.anchor,'font-size':10,'font-weight':600,fill:'var(--ink-2)',
       stroke:'var(--surface-1)','stroke-width':3,'paint-order':'stroke'},svg);
     tx.textContent=inl.short;
-    const hit=svgEl('circle',{cx:x,cy:y,r:15,fill:'transparent',cursor:'pointer'},svg);
-    hit.addEventListener('pointermove',ev=>{
+    const hit=svgEl('circle',{cx:x,cy:y,r:HITR,fill:'transparent',cursor:'pointer'},svg);
+    const showInlet=(ev,pin)=>{
+      if(tipPinned&&!pin) return;
       const now=hours&&hours[0];
       showTip(ev.clientX,ev.clientY,inl.name, now?[
         {color:meta.color,val:meta.ic+' '+meta.label,lbl:''},
         {val:now.hs+' ft @ '+now.tp+' s',lbl:'seas'},
         {val:now.wind+' kn '+compass(now.wdir??0),lbl:'wind'},
       ]:[]);
-    });
-    hit.addEventListener('pointerleave',hideTip);
+      if(pin) pinTip(ev);
+    };
+    hit.addEventListener('pointermove',ev=>showInlet(ev,false));
+    hit.addEventListener('pointerdown',ev=>showInlet(ev,true));
+    hit.addEventListener('pointerleave',()=>hideTip());
     hit.addEventListener('click',()=>{
-      hideTip();
+      // touch: first tap shows the pinned info, second tap activates
+      if(isCoarse()&&state.armedMarker!=='inlet:'+inl.id){ state.armedMarker='inlet:'+inl.id; return; }
+      state.armedMarker=null; hideTip(true);
       if(opts&&opts.route){ $('#depSel').value=inl.id; renderOffshore(); }
-      else { state.detailInlet=inl.id; renderDetail(); setView('detail'); }
+      else { state.detailInlet=inl.id; setView('detail'); }
     });
   }
 
@@ -298,10 +320,10 @@ function coastMap(parent, opts){
     });
   }
 
-  // cursor readout — every overlay value reachable without tooltips
+  // cursor readout — every overlay value reachable without tooltips; a tap pins it
   if(grid&&(state.layers.sst||state.layers.wind)){
     const ro=el('div','mapreadout',wrap);
-    svg.addEventListener('pointermove',ev=>{
+    const updateRO=ev=>{
       const r=svg.getBoundingClientRect();
       const lon=B.lonMin+(ev.clientX-r.left)/r.width*(B.lonMax-B.lonMin);
       const lat=B.latMax-(ev.clientY-r.top)/r.height*(B.latMax-B.latMin);
@@ -312,8 +334,10 @@ function coastMap(parent, opts){
       if(wv) bits.push(wv.spd.toFixed(0)+' kn '+compass((Math.atan2(-wv.u,-wv.v)*180/Math.PI+360)%360));
       if(bits.length){ ro.textContent=bits.join(' · ')+(sstSource==='demo'&&!(grid&&grid.live)?' · demo':''); ro.style.display='block'; }
       else ro.style.display='none';
-    });
-    svg.addEventListener('pointerleave',()=>{ro.style.display='none';});
+    };
+    svg.addEventListener('pointermove',ev=>{ if(ro.dataset.pin==='1') return; updateRO(ev); });
+    svg.addEventListener('pointerdown',ev=>{ ro.dataset.pin='1'; updateRO(ev); });
+    svg.addEventListener('pointerleave',()=>{ if(ro.dataset.pin!=='1') ro.style.display='none'; });
   }
 
   // SST scale legend (required for the semantic-heat ramp)
@@ -337,8 +361,8 @@ function coastMap(parent, opts){
     el('span','sstnote',lg,srcTxt);
   }
 
-  // unmissable watermark when everything on this map is synthetic
-  if(sstSource==='demo'&&!(grid&&grid.live)){
+  // unmissable watermark when everything on this map is synthetic (never while still loading)
+  if(sstSource==='demo'&&grid&&!grid.live){
     const wm=svgEl('text',{x:W/2,y:H/2,'text-anchor':'middle','font-size':30,'font-weight':800,
       fill:'var(--ink-3)',opacity:0.32,'letter-spacing':'6',
       transform:`rotate(-16 ${W/2} ${H/2})`},svg);
