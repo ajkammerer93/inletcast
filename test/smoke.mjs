@@ -45,7 +45,7 @@ await scenario('live: all sources up -> live badge, 7 inlet cards, no page error
   // single APP_VERSION drives both the footer and the Method tab
   const fv = (text(document, 'footer.disc') || '').match(/prototype v(\d+\.\d+)/);
   assert(fv, 'footer shows a version string');
-  assert(fv[1] === '0.6', `footer version is v${fv && fv[1]}, want v0.6`);
+  assert(fv[1] === '0.7', `footer version is v${fv && fv[1]}, want v0.7`);
   const mv = (text(document, '#methodBody') || '').match(/prototype v(\d+\.\d+)/);
   assert(mv && mv[1] === fv[1], `Method tab version (${mv && mv[1]}) should match footer (${fv[1]})`);
   // Method honesty list names the offshore-planner gaps
@@ -67,6 +67,8 @@ await scenario('offline: all sources down -> demo mode clearly labeled, app stil
   assert(cards.length >= 7, `found ${cards.length} inlet cards, want >= 7`);
   const badge = document.getElementById('modeBadge') || document.querySelector('.mode-badge');
   assert(badge && /demo/i.test(badge.textContent), `badge says "${badge && badge.textContent}"`);
+  // no satellite value pitch when the SST layer is not actually the satellite analysis
+  assert(!document.querySelector('#coastPanel .mapvalue'), 'satellite-SST pitch absent when MUR is unreachable');
   window.close();
 });
 
@@ -150,6 +152,13 @@ await scenario('terms & copy: footer terms link, binding language, attribution, 
   assert(/maximum extent permitted/i.test(terms.textContent), 'terms contain limitation-of-liability language');
   assert(/North Carolina/.test(terms.textContent), 'terms name NC governing law');
   assert(/no cookies, no analytics, no tracking/i.test(terms.textContent), 'terms carry the privacy note');
+  // the privacy note must count ALL local storage the app actually uses, not just the banner flag
+  assert(!/single localStorage flag/i.test(terms.textContent), 'privacy note no longer undercounts storage');
+  assert(/theme choice/i.test(terms.textContent), 'privacy note discloses the persisted theme choice');
+  assert(/notice banner/i.test(terms.textContent), 'privacy note discloses the banner-dismissal flag');
+  assert(/forecast responses/i.test(terms.textContent), 'privacy note discloses the forecast response cache');
+  assert(/service worker/i.test(terms.textContent), 'privacy note discloses the service-worker file cache');
+  assert(/stays on your device/i.test(terms.textContent), 'privacy note states storage never leaves the device');
   // clicking the footer link opens the terms view in-app
   link.click();
   assert(terms.classList.contains('active'), 'terms link activates the terms view');
@@ -247,11 +256,18 @@ await scenario('hash routing: #/inlet/<id> deep link, back to #/inlets, lazy #/o
   assert(detail.classList.contains('active'), 'hash #/inlet/<id> activates the detail view');
   assert(/New Topsail/.test(detail.textContent), 'detail view shows the routed inlet');
   assert(/New Topsail Inlet — InletCast/.test(document.title), `document.title is share-worthy, got "${document.title}"`);
+  // tab pattern stays coherent in the detail drill-down: the selected tab controls the VISIBLE panel
+  const tabInlets = document.getElementById('tab-inlets');
+  assert(tabInlets.getAttribute('aria-selected') === 'true', 'Inlets tab stays selected for the detail view');
+  assert(tabInlets.getAttribute('aria-controls') === 'view-detail', 'selected tab points at the visible detail panel');
+  assert(detail.getAttribute('role') === 'tabpanel' && detail.getAttribute('aria-labelledby') === 'tab-inlets',
+    'detail panel completes the tab pattern');
   // browser back (hash restored) returns to the inlets view
   window.location.hash = '#/inlets';
   window.dispatchEvent(new window.Event('hashchange'));
   assert(document.getElementById('view-inlets').classList.contains('active'), 'back to #/inlets reactivates the list');
   assert(!detail.classList.contains('active'), 'detail view deactivates on back');
+  assert(tabInlets.getAttribute('aria-controls') === 'view-inlets', 'tab controls return to the list panel on back');
   // hidden-at-boot views render on first activation via the hash
   window.location.hash = '#/offshore';
   window.dispatchEvent(new window.Event('hashchange'));
@@ -311,6 +327,14 @@ await scenario('point-of-use help: status chip opens the class-definition popove
   assert(/never a statement/.test(pop.textContent), 'popover carries the no-go-signal caveat');
   // the chip click must not have navigated into the detail view
   assert(document.getElementById('view-inlets').classList.contains('active'), 'chip click does not open the card');
+  // chips are real controls: keyboard users open the same point-of-use definitions
+  assert(chip.getAttribute('role') === 'button', 'status chip has role=button');
+  assert(chip.tabIndex === 0, 'status chip is keyboard-focusable');
+  assert(chip.getAttribute('aria-label'), 'status chip carries an accessible name');
+  pop.style.display = 'none';
+  chip.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  assert(pop.style.display === 'block', 'Enter on a chip reopens the popover');
+  assert(document.getElementById('view-inlets').classList.contains('active'), 'chip Enter does not open the card');
   window.close();
 });
 
@@ -450,18 +474,25 @@ await scenario('marketing & seo: share meta, JSON-LD, hero pitch, person byline,
   assert(hero.hidden, 'hero hidden on other views');
   window.eval('setView("inlets");');
   assert(!hero.hidden, 'hero returns with the Inlets view');
-  // competitive frame on the map panel; Method drops the freesurfforecast name-drop
-  assert(/The same class of satellite SST the paid chart services sell — free/.test(text(document, '#coastPanel') || ''), 'map panel carries the competitive frame');
+  // competitive frame on the map panel: honest satellite pitch, shown only while MUR renders,
+  // never the "same class of data the paid services sell" oversell
+  assert(/Free satellite-blended 1-km SST/.test(text(document, '#coastPanel') || ''), 'map panel carries the satellite-SST value pitch');
+  assert(!/paid chart services sell/.test(document.body.textContent), 'MUR oversell absent everywhere on the page');
   assert(!/freesurfforecast/.test(text(document, '#methodBody') || ''), 'Method drops the freesurfforecast name-drop');
+  // map header copy matches the actual pointer behavior (jsdom is a fine pointer: click-to-open)
+  assert(/click one to open the inlet/.test(text(document, '#coastPanel') || ''), 'map copy describes click-to-open on non-touch');
   // person-first byline in Method and footer; the LLC stays in the copyright line only
   assert(/Built by AJ Kammerer, a marine forecaster who runs these inlets/.test(text(document, '#methodBody') || ''), 'Method leads with the person byline');
   assert(/Built by AJ Kammerer, a marine forecaster who runs these inlets/.test(text(document, 'footer.disc') || ''), 'footer carries the person byline');
   assert(!/Ghosttree/.test(text(document, '#methodBody') || ''), 'Method no longer names the LLC');
   assert(/© 2026 Ghosttree Technical Solutions, LLC/.test(text(document, 'footer.disc') || ''), 'LLC stays in the copyright line');
   assert(!/Monday and Thursday/.test(document.body.textContent), 'no update-cadence promise anywhere on the page');
+  // hero frames the ask around the forecaster note, honestly (in the works — no cadence claim)
+  assert(/weekly forecaster note/.test(hero.textContent) && /beta list/.test(hero.textContent), 'hero frames the beta ask around the forecaster note');
+  assert(hero.querySelector('a[href^="mailto:"]'), 'hero beta-list link is actionable');
   // CTA: mailto keeps working, and a Copy email fallback reveals the address without a mail client
   const cta = document.querySelector('a.betabtn');
-  assert(cta && /Get beta updates by email/.test(cta.textContent), `beta CTA says "${cta && cta.textContent}"`);
+  assert(cta && /Join the beta list/.test(cta.textContent), `beta CTA says "${cta && cta.textContent}"`);
   const btn = document.getElementById('copyEmailBtn');
   assert(btn, 'Copy email fallback button present');
   const addrSpan = document.getElementById('copyAddr');

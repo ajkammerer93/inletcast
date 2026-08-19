@@ -29,6 +29,10 @@ function setView(v){
     b.setAttribute('aria-selected',on?'true':'false');
     b.tabIndex=on?0:-1;
   });
+  // while a detail view is open the Inlets tab stays selected — point it at the visible
+  // panel so a SR never hears a selected tab whose controlled panel is display:none
+  const ti=document.getElementById('tab-inlets');
+  if(ti) ti.setAttribute('aria-controls', v==='detail'?'view-detail':'view-inlets');
   renderActiveView();           // after the class flip, so charts measure a visible container
   // hidden views keep their DOM until the next activation — stop their wind-particle
   // loops so a display:none map never burns battery (re-activation re-renders anyway)
@@ -74,10 +78,20 @@ function chipFor(cls, extra){
   const c=document.createElement('span');
   c.className='chip '+cls;
   c.textContent=m.ic+' '+m.label+(extra?(' '+extra):'');
-  // every status chip explains itself: tap for the four class definitions
+  // every status chip explains itself: tap or Enter/Space for the four class definitions —
+  // a real control, so keyboard and SR users reach the point-of-use definitions too
   c.title='What do these classes mean? Tap for definitions';
   c.style.cursor='pointer';
+  c.setAttribute('role','button');
+  c.tabIndex=0;
+  c.setAttribute('aria-label',m.label+(extra?(' '+extra):'')+' — what do these classes mean?');
   c.addEventListener('click',e=>{e.stopPropagation();showClassPopover(e.clientX,e.clientY);});
+  c.addEventListener('keydown',e=>{
+    if(e.key!=='Enter'&&e.key!==' ') return;
+    e.preventDefault(); e.stopPropagation();   // don't also activate the card underneath
+    const r=c.getBoundingClientRect();
+    showClassPopover(r.left+r.width/2, r.top+r.height);
+  });
   return c;
 }
 // point-of-use definitions of the four classes — same wording the Method tab uses (CLS_META)
@@ -154,10 +168,15 @@ function renderInletCards(){
   if(mp){
     mp.textContent='';
     const mh=el('div','maphead',mp); el('h3','',mh,'The coast at a glance');
-    el('span','',mh,'markers show current conditions — tap one to open the inlet');
+    // touch markers are two-tap (first tap pins the info, second opens) — the copy says so
+    el('span','',mh,isCoarse()
+      ?'markers show current conditions — tap one for details, tap again to open the inlet'
+      :'markers show current conditions — click one to open the inlet');
     const sp=el('span','spacer',mh); layerToggles(mh);
-    // the competitive frame, stated once where the SST layer is on screen
-    el('p','mapvalue',mp,'The same class of satellite SST the paid chart services sell — free — plus a crossing score for your inlet and your boat.');
+    // the competitive frame, stated once where the SST layer is on screen — only while the
+    // satellite analysis is actually rendering (an NWP/demo fallback carries no satellite claim)
+    if(state.data.murGrid)
+      el('p','mapvalue',mp,'Free satellite-blended 1-km SST — no subscription — plus a crossing score for your inlet and your boat.');
     coastMap(mp);
     stripLegend(mp).style.padding='6px 4px 4px';
   }
@@ -428,7 +447,9 @@ function renderOffshore(){
 
   const mapP=el('div','panel mappanel',body);
   const mh=el('div','maphead',mapP); el('h3','',mh,'The run');
-  el('span','',mh,'tap an inlet or a zone to change the plan');
+  el('span','',mh,isCoarse()
+    ?'tap an inlet or zone for details, tap again to change the plan'
+    :'click an inlet or a zone to change the plan');
   const sp2=el('span','spacer',mh); layerToggles(mh);
   coastMap(mapP,{route:{inletId:inl.id, zoneId:zone.id}});
 

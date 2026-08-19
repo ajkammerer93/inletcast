@@ -1,7 +1,7 @@
 'use strict';
 /* config.js — constants: app version, inlet/zone/station definitions, boat classes, map data, overlay grid spec. */
 
-const APP_VERSION='0.6';
+const APP_VERSION='0.7';
 
 const CONFIG = {
   hoursDetail: 72,

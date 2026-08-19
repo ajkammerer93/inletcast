@@ -50,7 +50,7 @@ try{var t=localStorage.getItem('inletcast_theme');if(t==='dark'||t==='light')doc
     <button type="button" class="mode-badge" id="modeBadge" aria-live="polite" aria-expanded="false" title="Data source status — activate for details"><span class="dot"></span><span id="modeText">Loading…</span></button>
     <div class="mode-sources" id="modeSources" hidden></div>
     <span class="spacer"></span>
-    <a class="iconbtn betabtn" href="mailto:andrew.kammerer@gts-llc.biz?subject=Add%20me%20to%20the%20InletCast%20beta%20list&body=Home%20inlet%3A%20%0ABoat%3A%20%0AWhat%20I%20fish%2Frun%20for%3A%20">Get beta updates by email</a>
+    <a class="iconbtn betabtn" href="mailto:andrew.kammerer@gts-llc.biz?subject=Add%20me%20to%20the%20InletCast%20beta%20list&body=Home%20inlet%3A%20%0ABoat%3A%20%0AWhat%20I%20fish%2Frun%20for%3A%20" title="Beta updates by email — first word when the weekly forecaster note ships">Join the beta list</a>
     <button type="button" class="iconbtn" id="copyEmailBtn" title="Copy the beta email address — if the email link doesn't open your mail app">Copy email</button>
     <span class="copyaddr" id="copyAddr" hidden></span>
     <button class="iconbtn" id="themeBtn" title="Toggle theme" aria-label="Toggle color theme">◐</button>
@@ -85,6 +85,7 @@ try{var t=localStorage.getItem('inletcast_theme');if(t==='dark'||t==='light')doc
   <div class="hero" id="hero">
     <h2 class="herotitle">When can you get out — and when can you get back in?</h2>
     <p class="herosub">Free crossing-condition windows for North Carolina inlets, scored for your boat size.</p>
+    <p class="heronote">Free while in beta. A weekly forecaster note is in the works — <a href="mailto:andrew.kammerer@gts-llc.biz?subject=Add%20me%20to%20the%20InletCast%20beta%20list&body=Home%20inlet%3A%20%0ABoat%3A%20%0AWhat%20I%20fish%2Frun%20for%3A%20">join the beta list</a> to hear first.</p>
   </div>
   <div class="notice" id="banner">
     <div><strong>Decision support, not a decision.</strong> InletCast summarizes model guidance about inlet and offshore conditions. It does not know your boat, your crew, or what the water looks like today. Local knowledge, official NWS forecasts, and your own judgment come first. By using InletCast you accept the <a href="#view-terms">Terms of Use</a>.</div>
@@ -99,7 +100,9 @@ try{var t=localStorage.getItem('inletcast_theme');if(t==='dark'||t==='light')doc
     <div class="cardgrid" id="inletCards"></div>
   </section>
 
-  <section class="view" id="view-detail"></section>
+  <!-- detail view is a drill-down of the Inlets tab: while it is open, setView points
+       tab-inlets' aria-controls here so the selected tab always controls the visible panel -->
+  <section class="view" id="view-detail" role="tabpanel" aria-labelledby="tab-inlets"></section>
 
   <section class="view" id="view-offshore" role="tabpanel" aria-labelledby="tab-offshore">
     <h2 class="viewtitle">Offshore trip planner — next 7 days</h2>
@@ -146,7 +149,7 @@ try{var t=localStorage.getItem('inletcast_theme');if(t==='dark'||t==='light')doc
       <h3>Governing law</h3>
       <p>These terms are governed by the laws of the State of North Carolina, without regard to conflict-of-law rules.</p>
       <h3>Privacy</h3>
-      <p>No cookies, no analytics, no tracking. A single localStorage flag remembers that you dismissed the notice banner; it never leaves your device. Forecast data is fetched by your browser directly from Open-Meteo and NOAA, which see your IP address like any web request. Beta-list emails are used only for product updates and are never shared.</p>
+      <p>No cookies, no analytics, no tracking. InletCast stores a few things in your browser&rsquo;s local storage so the site works well: your theme choice, a flag that you dismissed the notice banner, and a cached copy of recent forecast responses (so repeat visits load faster and a dead connection can show the last real forecast instead of nothing). A service worker also caches the app&rsquo;s own files for offline use. All of it stays on your device, none of it identifies you, and clearing this site&rsquo;s data in your browser removes it. Forecast data is fetched by your browser directly from Open-Meteo and NOAA, which see your IP address like any web request. Beta-list emails are used only for product updates and are never shared.</p>
       <h3>Not affiliated</h3>
       <p>InletCast is not affiliated with, operated by, or endorsed by NOAA or the National Weather Service. Operated by Ghosttree Technical Solutions, LLC, Hampstead, NC.</p>
     </div>

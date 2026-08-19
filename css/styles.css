@@ -143,6 +143,7 @@ p.viewsub { font-size:13px; color:var(--ink-2); margin-bottom:14px; }
 .hero { margin:2px 0 14px; }
 .hero h2.herotitle { font-size:22px; letter-spacing:-0.02em; margin:0 0 4px; }
 .hero p.herosub { font-size:14px; color:var(--ink-2); margin:0; }
+.hero p.heronote { font-size:12.5px; color:var(--ink-3); margin:4px 0 0; }
 
 /* notice banner */
 .notice {
@@ -213,6 +214,8 @@ p.viewsub { font-size:13px; color:var(--ink-2); margin-bottom:14px; }
   color:#fff;
 }
 .chip .ic { font-size:10px; }
+/* chips are keyboard-operable controls (they open the class-definitions popover) */
+.chip:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .chip.good { background:var(--st-good-deep); }
 .chip.warn { background:var(--st-warn); color:#3a2a00; }
 .chip.serious { background:var(--st-serious); color:#3d1400; }
