@@ -1,0 +1,30 @@
+Copyright (c) 2026 Ghosttree Technical Solutions, LLC. All rights reserved.
+
+Source-available license
+
+The source code in this repository is made publicly visible for
+transparency — so users of InletCast can see exactly how forecasts are
+fetched, scored, and displayed.
+
+Permission is granted to view and read this source code via this
+repository. No other rights are granted. Without prior written permission
+from Ghosttree Technical Solutions, LLC, you may not:
+
+  - copy, redistribute, or republish the code or substantial portions
+    of it;
+  - use it, in original or modified form, in any product or service;
+  - create derivative works from it;
+  - use it for training machine-learning models.
+
+Forecast and observational data displayed by InletCast come from
+third-party sources (NOAA, NASA/JPL via NOAA CoastWatch, Open-Meteo) under
+their own terms; nothing in this license restricts your use of those
+sources directly. Weather data by Open-Meteo.com (CC BY 4.0).
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY
+ARISING FROM THE USE OF THE SOFTWARE OR THE INLETCAST SERVICE. Use of the
+InletCast service is additionally governed by its Terms of Use at
+https://inletcast.com/#view-terms.
